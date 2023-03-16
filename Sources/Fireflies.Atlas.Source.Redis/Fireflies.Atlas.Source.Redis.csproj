@@ -1,0 +1,29 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+	<PropertyGroup>
+		<TargetFramework>net6.0</TargetFramework>
+		<ImplicitUsings>enable</ImplicitUsings>
+		<Nullable>enable</Nullable>
+		<Authors>Fireflies.Tech</Authors>
+		<Description>Fireflies Atlas Redis Source</Description>
+		<Copyright>2023 Fireflies.tech</Copyright>
+		<PackageLicenseExpression>MIT</PackageLicenseExpression>
+		<PackageReadmeFile>README.md</PackageReadmeFile>
+		<PackageIcon>Icon-128x128.png</PackageIcon>
+		<RepositoryUrl>https://github.com/firefliestech/Fireflies.Atlas</RepositoryUrl>
+	</PropertyGroup>
+
+	<ItemGroup>
+		<None Include="README.md" Pack="true" PackagePath="\" />
+		<None Include="..\..\Fireflies.Shared\Images\Icon-128x128.png" Pack="true" PackagePath="\" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<PackageReference Include="StackExchange.Redis" Version="2.6.70" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<ProjectReference Include="..\..\Fireflies.Atlas.Core\Fireflies.Atlas.Core.csproj" />
+	</ItemGroup>
+
+</Project>

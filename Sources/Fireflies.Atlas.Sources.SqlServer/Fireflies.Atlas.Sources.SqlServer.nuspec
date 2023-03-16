@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<package >
+	<metadata>
+		<id>$id$</id>
+		<version>$version$</version>
+		<title>$title$</title>
+		<authors>$author$</authors>
+		<requireLicenseAcceptance>false</requireLicenseAcceptance>
+		<description>$description$</description>
+		<copyright>$copyright$</copyright>
+		<tags>fireflies atlas source sql server</tags>
+	</metadata>
+	<dependencies>
+		<dependency id="Fireflies.Logging.Abstractions" version="1.0.0" />
+		<dependency id="Fireflies.Atlas.Core" version="$version$" />
+		<dependency id="Dapper" version="2.0.123" />
+		<dependency id="Microsoft.Data.SqlClient" version="5.1.0" />
+		<dependency id="Newtonsoft.Json" version="13.0.3" />
+	</dependencies>
+</package>

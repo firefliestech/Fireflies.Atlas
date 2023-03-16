@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<package >
+	<metadata>
+		<id>$id$</id>
+		<version>$version$</version>
+		<title>$title$</title>
+		<authors>$author$</authors>
+		<requireLicenseAcceptance>false</requireLicenseAcceptance>
+		<description>$description$</description>
+		<copyright>$copyright$</copyright>
+		<tags>fireflies atlas core</tags>
+	</metadata>
+	<dependencies>
+		<dependency id="Fireflies.Logging.Abstractions" version="1.0.0" />
+		<dependency id="Fireflies.Atlas.Annotations" version="$version$" />
+		<dependency id="FastExpressionCompiler" version="3.3.3" />
+	</dependencies>
+</package>
