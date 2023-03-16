@@ -1,0 +1,13 @@
+VERSION=$1
+ROOT_PATH=$(pwd)
+
+find -name *.nuspec | grep -v "/obj/" | grep -v "Fireflies.Shared" | while read -r i
+do
+	DIR_NAME=$(dirname $i)
+	echo "Entering $DIR_NAME"
+	cd $DIR_NAME
+
+	dotnet pack -p:PackageVersion=$VERSION --output $ROOT_PATH/nupkg
+
+	cd $ROOT_PATH
+done
