@@ -14,15 +14,17 @@ public class SqlMonitor : IDisposable {
     private int _maxValue;
     private readonly Dictionary<TableDescriptor, Action<JsonObject>> _monitors = new();
     private static bool _initialized;
-	private readonly Guid _uuid = Guid.NewGuid();
+    private readonly Guid _uuid = Guid.NewGuid();
     private readonly Timer _timer;
     private SqlConnection _dependencyConnection;
     private SqlDependency _dependency;
+    private readonly JsonSerializerOptions _serializerOptions;
 
     public SqlMonitor(string connectionString, Core.Atlas atlas) {
         _connectionString = connectionString;
         _atlas = atlas;
         _timer = new Timer(UpdateHeartbeat);
+        _serializerOptions = new JsonSerializerOptions { PropertyNameCaseInsensitive = true, Converters = { new XmlStringToEnumConverter(), new AutoStringToNumberConverter() } };
     }
 
     public void StartMonitor() {
@@ -80,7 +82,7 @@ public class SqlMonitor : IDisposable {
             using var command = new SqlCommand(MonitorInstallScript, connection);
             command.ExecuteNonQuery();
 
-			StartMonitor();
+            StartMonitor();
             AddListener();
 
             _timer.Change(TimeSpan.FromSeconds(20), TimeSpan.FromSeconds(20));
@@ -91,12 +93,12 @@ public class SqlMonitor : IDisposable {
         _monitors.TryAdd(tableDescriptor, jsonDocument => {
             var insertedRow = jsonDocument["inserted"]["row"];
             if(insertedRow != null) {
-                var document = insertedRow.Deserialize<TDocument>(new JsonSerializerOptions { PropertyNameCaseInsensitive = true, Converters = { new AutoStringToNumberConverter() } });
+                var document = insertedRow.Deserialize<TDocument>(_serializerOptions);
                 _atlas.UpdateDocument(document);
             } else {
                 var deletedRow = jsonDocument["deleted"]["row"];
                 if(deletedRow != null) {
-                    var document = deletedRow.Deserialize<TDocument>(new JsonSerializerOptions { PropertyNameCaseInsensitive = true, Converters = { new AutoStringToNumberConverter() } });
+                    var document = deletedRow.Deserialize<TDocument>(_serializerOptions);
                     _atlas.DeleteDocument(document);
                 }
             }
@@ -303,6 +305,4 @@ END'
 	ALTER TABLE [Fireflies].[Update] ENABLE TRIGGER [Fireflies_Update_Trigger]
 END
 ";
-
-
 }
