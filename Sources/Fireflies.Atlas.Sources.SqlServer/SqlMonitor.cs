@@ -91,12 +91,12 @@ public class SqlMonitor : IDisposable {
         _monitors.TryAdd(tableDescriptor, jsonDocument => {
             var insertedRow = jsonDocument["inserted"]["row"];
             if(insertedRow != null) {
-                var document = insertedRow.Deserialize<TDocument>(new JsonSerializerOptions { Converters = { new AutoStringToNumberConverter() } });
+                var document = insertedRow.Deserialize<TDocument>(new JsonSerializerOptions { PropertyNameCaseInsensitive = true, Converters = { new AutoStringToNumberConverter() } });
                 _atlas.UpdateDocument(document);
             } else {
                 var deletedRow = jsonDocument["deleted"]["row"];
                 if(deletedRow != null) {
-                    var document = deletedRow.Deserialize<TDocument>(new JsonSerializerOptions { Converters = { new AutoStringToNumberConverter() } });
+                    var document = deletedRow.Deserialize<TDocument>(new JsonSerializerOptions { PropertyNameCaseInsensitive = true, Converters = { new AutoStringToNumberConverter() } });
                     _atlas.DeleteDocument(document);
                 }
             }
@@ -269,6 +269,9 @@ BEGIN
 
 	-- Also clean up lingering listeners
     DELETE FROM [Fireflies].[Listener] WHERE [ListenerId] IN (SELECT [ListenerId] FROM [Fireflies].[Listener] WHERE DATEDIFF(MINUTE, LastHeartbeatAt, GETUTCDATE()) > 2)
+
+    -- Clean up lingering monitors
+    DELETE FROM [Fireflies].[Monitor] WHERE [ListenerId] NOT IN (SELECT [ListenerId] FROM [Fireflies].[Listener])
 END'
 	EXEC sp_executesql @Sql
 	ALTER TABLE [Fireflies].[Listener] ENABLE TRIGGER [Fireflies_Listener_Trigger]
