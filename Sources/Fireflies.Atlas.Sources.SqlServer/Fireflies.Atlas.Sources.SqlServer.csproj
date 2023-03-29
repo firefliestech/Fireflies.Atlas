@@ -26,7 +26,6 @@
 
 	<ItemGroup>
 		<ProjectReference Include="..\..\Fireflies.Atlas.Core\Fireflies.Atlas.Core.csproj" />
-		<ProjectReference Include="..\..\Fireflies.Shared\Logging\Fireflies.Logging.Abstractions\Fireflies.Logging.Abstractions.csproj" />
 	</ItemGroup>
 
 </Project>

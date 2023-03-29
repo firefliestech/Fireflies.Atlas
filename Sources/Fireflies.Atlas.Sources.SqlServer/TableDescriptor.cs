@@ -24,6 +24,11 @@ public class TableDescriptor {
         }
     }
 
+    public TableDescriptor(string schema, string table) {
+        _schema = schema;
+        _table = table;
+    }
+
     protected bool Equals(TableDescriptor other) {
         return _schema.ToUpper() == other._schema.ToUpper() && _table.ToUpper() == other._table.ToUpper();
     }

@@ -29,7 +29,7 @@ public class LambdaToSqlTranslator<T> : ExpressionVisitor, IDisposable {
     private void AddColumns() {
         var columns = typeof(T).GetProperties(BindingFlags.Instance | BindingFlags.Public).Select(x => new { Property = x, Attribute = x.GetCustomAttribute<AtlasFieldAttribute>(true) })
             .Where(x => x.Attribute != null)
-            .Select(x => !string.IsNullOrWhiteSpace(x.Attribute.Name) ? $"{x.Attribute.Name} AS {x.Property.Name}" : x.Property.Name);
+            .Select(x => !string.IsNullOrWhiteSpace(x.Attribute!.Name) ? $"{x.Attribute.Name} AS {x.Property.Name}" : x.Property.Name);
 
         _sqlAccumulator.Append($" {string.Join(", ", columns)}");
     }

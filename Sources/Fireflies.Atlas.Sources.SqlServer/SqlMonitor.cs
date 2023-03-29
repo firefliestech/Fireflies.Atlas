@@ -16,8 +16,8 @@ public class SqlMonitor : IDisposable {
     private static bool _initialized;
     private readonly Guid _uuid = Guid.NewGuid();
     private readonly Timer _timer;
-    private SqlConnection _dependencyConnection;
-    private SqlDependency _dependency;
+    private SqlConnection? _dependencyConnection;
+    private SqlDependency? _dependency;
     private readonly JsonSerializerOptions _serializerOptions;
 
     public SqlMonitor(string connectionString, Core.Atlas atlas) {
@@ -57,7 +57,7 @@ public class SqlMonitor : IDisposable {
             if(_maxValue < updateId)
                 _maxValue = updateId;
 
-            var tableDescriptor = new TableDescriptor { Schema = (string)sqlDataReader[1], Table = (string)sqlDataReader[2] };
+            var tableDescriptor = new TableDescriptor((string)sqlDataReader[1], (string)sqlDataReader[2]);
 
             if(_monitors.TryGetValue(tableDescriptor, out var callback)) {
                 var value = XDocument.Parse((string)sqlDataReader[3]);
@@ -67,7 +67,7 @@ public class SqlMonitor : IDisposable {
             }
         }
 
-        _dependency.OnChange -= OnDependencyChange;
+        _dependency!.OnChange -= OnDependencyChange;
         InternalStartMonitor(false);
     }
 
@@ -91,12 +91,12 @@ public class SqlMonitor : IDisposable {
         AddMonitor(tableDescriptor);
 
         _monitors.TryAdd(tableDescriptor, jsonDocument => {
-            var insertedRow = jsonDocument["inserted"]["row"];
+            var insertedRow = jsonDocument["inserted"]!["row"];
             if(insertedRow != null) {
                 var document = insertedRow.Deserialize<TDocument>(_serializerOptions);
                 _atlas.UpdateDocument(document);
             } else {
-                var deletedRow = jsonDocument["deleted"]["row"];
+                var deletedRow = jsonDocument["deleted"]!["row"];
                 if(deletedRow != null) {
                     var document = deletedRow.Deserialize<TDocument>(_serializerOptions);
                     _atlas.DeleteDocument(document);
@@ -142,7 +142,7 @@ public class SqlMonitor : IDisposable {
     public void Dispose() {
         _timer.Dispose();
         _monitors.Clear();
-        _dependencyConnection.Dispose();
+        _dependencyConnection?.Dispose();
 
         RemoveListener();
     }
