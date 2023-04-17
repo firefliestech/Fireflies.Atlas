@@ -1,8 +1,8 @@
 ﻿namespace Fireflies.Atlas.Sources.SqlServer;
 
 public class TableDescriptor {
-    private string _schema;
-    private string _table;
+    private string _schema = null!;
+    private string _table = null!;
 
     public string Schema {
         get => _schema;
@@ -25,8 +25,8 @@ public class TableDescriptor {
     }
 
     public TableDescriptor(string schema, string table) {
-        _schema = schema;
-        _table = table;
+        Schema = schema;
+        Table = table;
     }
 
     protected bool Equals(TableDescriptor other) {

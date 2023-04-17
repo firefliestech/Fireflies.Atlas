@@ -19,7 +19,7 @@ public class AtlasDocumentDictionary<TDocument> : AtlasDocumentDictionary, IDocu
     private readonly List<FieldIndex<TDocument>> _indexes = new();
 
     public event Action<TDocument>? Loaded;
-    public event Action<TDocument>? Updated;
+    public event Action<TDocument, TDocument?>? Updated;
     public event Action<TDocument>? Deleted;
 
     public AtlasDocumentDictionary(Atlas atlas) {
@@ -34,11 +34,11 @@ public class AtlasDocumentDictionary<TDocument> : AtlasDocumentDictionary, IDocu
     internal async Task Preload() {
         _preloaded = true;
         _logger.Debug(() => "Preloading...");
-        await InternalGetDocuments();
+        await LoadDocumentsFromSource();
         _logger.Trace(() => $"Preloading done! {_documents.Count} documents loaded.");
     }
 
-    public void UpdateDocument(TDocument document) {
+    internal void UpdateDocument(TDocument document, bool forceEvent = false) {
         var updated = false;
 
         TDocument oldDocument = default;
@@ -49,7 +49,7 @@ public class AtlasDocumentDictionary<TDocument> : AtlasDocumentDictionary, IDocu
             return document;
         });
 
-        if(updated) {
+        if(updated || forceEvent) {
             foreach(var index in _indexes) {
                 index.Remove(document);
             }
@@ -59,11 +59,13 @@ public class AtlasDocumentDictionary<TDocument> : AtlasDocumentDictionary, IDocu
             index.Add(document);
         }
 
-        if(updated) {
+        if(updated || forceEvent) {
             _logger.Debug(() => $"Document was updated. New: {document.AsString()}. Old: {oldDocument.AsString()}");
-            Updated?.Invoke(document);
+
+            Updated?.Invoke(ProxyFactory(document, new QueryContext(), Relations),
+                oldDocument != null ? ProxyFactory(oldDocument, new QueryContext(), Relations) : default);
         } else {
-            Loaded?.Invoke(document);
+            Loaded?.Invoke(ProxyFactory(document, new QueryContext(), Relations));
         }
     }
 
@@ -75,6 +77,10 @@ public class AtlasDocumentDictionary<TDocument> : AtlasDocumentDictionary, IDocu
     }
 
     public async Task<IEnumerable<TDocument>> GetDocuments(Expression predicate, QueryContext queryContext) {
+        return await InternalGetDocuments(predicate, queryContext, false);
+    }
+
+    private async Task<IEnumerable<TDocument>> InternalGetDocuments(Expression predicate, QueryContext queryContext, bool noLoad) {
         var whereAggregateVisitor = new WhereAggregateVisitor();
         var normalizedExpression = whereAggregateVisitor.CreateWhereExpression(predicate);
 
@@ -89,7 +95,7 @@ public class AtlasDocumentDictionary<TDocument> : AtlasDocumentDictionary, IDocu
         }
 
         TDocument[] result;
-        if(_preloaded) {
+        if(_preloaded || noLoad) {
             // If preloaded, all documents should already be in memory
             _logger.Trace(() => $"Documents were preloaded. Searching in cache. Predicate: {normalizedExpression}");
 
@@ -111,7 +117,7 @@ public class AtlasDocumentDictionary<TDocument> : AtlasDocumentDictionary, IDocu
             _logger.Trace(() => $"Documents were preloaded. Searching in cache. Documents found: {result.Length}. Predicate: {normalizedExpression}");
         } else {
             _logger.Trace(() => $"Documents were not preloaded. Searching in source. Predicate: {predicate}");
-            result = await InternalGetDocuments(normalizedExpression);
+            result = await LoadDocumentsFromSource(normalizedExpression);
             _logger.Trace(() => $"Documents were not preloaded. Searching in source. Documents found: {result.Length}. Predicate: {normalizedExpression}");
         }
 
@@ -165,7 +171,7 @@ public class AtlasDocumentDictionary<TDocument> : AtlasDocumentDictionary, IDocu
         return false;
     }
 
-    private async Task<TDocument[]> InternalGetDocuments(Expression<Func<TDocument, bool>>? predicate = null) {
+    private async Task<TDocument[]> LoadDocumentsFromSource(Expression<Func<TDocument, bool>>? predicate = null) {
         _logger.Trace(() => $"Getting documents from source. Predicate: {predicate}");
         var (cache, documents) = await Source.GetDocuments(predicate);
 
@@ -260,5 +266,10 @@ public class AtlasDocumentDictionary<TDocument> : AtlasDocumentDictionary, IDocu
 
     public override void Dispose() {
         Source.Dispose();
+    }
+
+    public async Task TriggerUpdate<TDocument>(Expression<Func<TDocument, bool>> predicate) where TDocument : new() {
+        foreach(var affectedDocument in await InternalGetDocuments(predicate, new QueryContext(), true))
+            Updated?.Invoke(affectedDocument, affectedDocument);
     }
 }

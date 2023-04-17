@@ -59,4 +59,24 @@ public class AtlasDocumentBuilder<TDocument> : AtlasDocumentBuilder where TDocum
         _dictionary.Source = source;
         return this;
     }
+
+    public AtlasDocumentBuilder<TDocument> OnUpdate(Action<(Atlas Atlas, TDocument NewDocument, TDocument? OldDocument)> action) {
+        _dictionary.Updated += (newDocument, oldDocument) => action((_atlas, newDocument, oldDocument));
+        return this;
+    }
+
+    public AtlasDocumentBuilder<TDocument> OnUpdate(Func<(Atlas Atlas, TDocument NewDocument, TDocument? OldDocument), Task> action) {
+        _dictionary.Updated += async (newDocument, oldDocument) => await action((_atlas, newDocument, oldDocument));
+        return this;
+    }
+
+    public AtlasDocumentBuilder<TDocument> OnLoad(Action<(Atlas Atlas, TDocument Document)> action) {
+        _dictionary.Loaded += document => action((_atlas, document));
+        return this;
+    }
+
+    public AtlasDocumentBuilder<TDocument> OnLoad(Func<(Atlas Atlas, TDocument Document), Task> action) {
+        _dictionary.Loaded += async document => await action((_atlas, document));
+        return this;
+    }
 }

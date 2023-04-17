@@ -1,5 +1,6 @@
 ﻿using System.Collections.Concurrent;
 using System.Linq.Expressions;
+using Fireflies.Atlas.Core.Helpers;
 
 namespace Fireflies.Atlas.Core;
 
@@ -26,8 +27,13 @@ public class FieldIndex<TDocument, TProperty> : FieldIndex<TDocument> {
 
     public override void Remove(TDocument document) {
         var key = _keyAccessor(document);
-        if (_indexedDocuments.TryGetValue(key, out var list)) {
-            list.Remove(document);
+        var documentKey = document.CalculateKey();
+        if(!_indexedDocuments.TryGetValue(key, out var list))
+            return;
+
+        for(var i = list.Count - 1; i >= 0; i--) {
+            if(list[i].CalculateKey() == documentKey)
+                list.RemoveAt(i);
         }
     }
 

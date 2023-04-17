@@ -8,8 +8,11 @@ namespace Fireflies.Atlas.Sources.SqlServer;
 public class LambdaToSqlTranslator<T> : ExpressionVisitor, IDisposable {
     private readonly StringBuilder _sqlAccumulator = new();
     private static readonly MethodInfo? StringContainsMethodInfo = typeof(string).GetMethod(nameof(string.Contains), new[] { typeof(string) });
+    private static readonly MethodInfo? StringContainsWithStringComparisonMethodInfo = typeof(string).GetMethod(nameof(string.Contains), new[] { typeof(string), typeof(StringComparison) });
     private static readonly MethodInfo? StringStartsWithMethodInfo = typeof(string).GetMethod(nameof(string.StartsWith), new[] { typeof(string) });
+    private static readonly MethodInfo? StringStartsWithWithStringComparisonMethodInfo = typeof(string).GetMethod(nameof(string.StartsWith), new[] { typeof(string), typeof(StringComparison) });
     private static readonly MethodInfo? StringEndWithMethodInfo = typeof(string).GetMethod(nameof(string.EndsWith), new[] { typeof(string) });
+    private static readonly MethodInfo? StringEndsWithWithStringComparisonMethodInfo = typeof(string).GetMethod(nameof(string.StartsWith), new[] { typeof(string), typeof(StringComparison) });
 
     public string Translate(TableDescriptor tableDescriptor, Expression? expression) {
         AddSelect();
@@ -109,19 +112,19 @@ public class LambdaToSqlTranslator<T> : ExpressionVisitor, IDisposable {
             throw new NotSupportedException($"The method call '{node.Method}' is not supported");
         }
 
-        if (node.Method == StringContainsMethodInfo) {
+        if (node.Method == StringContainsMethodInfo || node.Method == StringContainsWithStringComparisonMethodInfo) {
             Visit(memberExpression);
             _sqlAccumulator.Append($" LIKE '%{constantArgument.Value}%'");
             return node;
         }
 
-        if (node.Method == StringStartsWithMethodInfo) {
+        if (node.Method == StringStartsWithMethodInfo || node.Method == StringStartsWithWithStringComparisonMethodInfo) {
             Visit(memberExpression);
             _sqlAccumulator.Append($" LIKE '{constantArgument.Value}%'");
             return node;
         }
 
-        if (node.Method == StringEndWithMethodInfo) {
+        if (node.Method == StringEndWithMethodInfo || node.Method == StringEndsWithWithStringComparisonMethodInfo) {
             Visit(memberExpression);
             _sqlAccumulator.Append($" LIKE '%{constantArgument.Value}'");
             return node;

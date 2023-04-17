@@ -9,6 +9,8 @@ public class Atlas : IDisposable {
     private IFirefliesLoggerFactory _loggerFactory = new NullLoggerFactory();
     private IFirefliesLogger _logger;
 
+    internal IEnumerable<AtlasDocumentDictionary> DocumentDictionaries => _dictionaries.Values;
+
     public Atlas() {
         _logger = _loggerFactory.GetLogger<Atlas>();
     }
@@ -81,5 +83,11 @@ public class Atlas : IDisposable {
         foreach(var x in _dictionaries.Values) {
            x.Dispose();
         }
+    }
+
+    public async Task TriggerUpdate<TDocument>(Expression<Func<TDocument, bool>> predicate) where TDocument : new() {
+        var documentDictionary = InternalGetDictionary<TDocument>();
+        if(documentDictionary != null)
+            await documentDictionary.TriggerUpdate(predicate).ConfigureAwait(false);
     }
 }

@@ -24,7 +24,7 @@ public class SqlMonitor : IDisposable {
         _connectionString = connectionString;
         _atlas = atlas;
         _timer = new Timer(UpdateHeartbeat);
-        _serializerOptions = new JsonSerializerOptions { PropertyNameCaseInsensitive = true, Converters = { new XmlStringToEnumConverter(), new AutoStringToNumberConverter() } };
+        _serializerOptions = new JsonSerializerOptions { PropertyNameCaseInsensitive = true, Converters = { new XmlStringToEnumConverter(), new AutoStringToNumberConverter(), new XmlStringToBooleanConverter() } };
     }
 
     public void StartMonitor() {
@@ -62,8 +62,9 @@ public class SqlMonitor : IDisposable {
             if(_monitors.TryGetValue(tableDescriptor, out var callback)) {
                 var value = XDocument.Parse((string)sqlDataReader[3]);
                 var json = JsonConvert.SerializeXNode(value, Formatting.None, true);
-                var jsonDocument = JsonSerializer.Deserialize<JsonObject>(json)!;
-                callback(jsonDocument);
+                var jsonDocument = JsonSerializer.Deserialize<JsonObject>(json);
+                if(jsonDocument != null)
+                    callback(jsonDocument);
             }
         }
 
