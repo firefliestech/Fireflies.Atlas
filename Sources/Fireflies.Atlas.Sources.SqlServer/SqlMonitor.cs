@@ -1,7 +1,9 @@
 ﻿using System.Data;
+using System.Linq.Expressions;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Xml.Linq;
+using FastExpressionCompiler;
 using Microsoft.Data.SqlClient;
 using Newtonsoft.Json;
 using JsonSerializer = System.Text.Json.JsonSerializer;
@@ -72,7 +74,7 @@ public class SqlMonitor : IDisposable {
         InternalStartMonitor(false);
     }
 
-    public void MonitorTable<TDocument>(TableDescriptor tableDescriptor) where TDocument : new() {
+    public void MonitorTable<TDocument>(TableDescriptor tableDescriptor, Expression<Func<TDocument, bool>>? filter) where TDocument : new() {
         if(!_initialized) {
             _initialized = true;
 
@@ -92,10 +94,16 @@ public class SqlMonitor : IDisposable {
         AddMonitor(tableDescriptor);
 
         _monitors.TryAdd(tableDescriptor, jsonDocument => {
+            var compiledFilter = filter?.CompileFast();
+
             var insertedRow = jsonDocument["inserted"]!["row"];
             if(insertedRow != null) {
-                var document = insertedRow.Deserialize<TDocument>(_serializerOptions);
-                _atlas.UpdateDocument(document);
+                var document = insertedRow.Deserialize<TDocument>(_serializerOptions)!;
+                if(compiledFilter != null && !compiledFilter(document)) {
+                    _atlas.DeleteDocument(document);
+                } else {
+                    _atlas.UpdateDocument(document);
+                }
             } else {
                 var deletedRow = jsonDocument["deleted"]!["row"];
                 if(deletedRow != null) {

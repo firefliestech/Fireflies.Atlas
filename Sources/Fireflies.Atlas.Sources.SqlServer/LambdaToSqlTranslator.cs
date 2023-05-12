@@ -14,13 +14,18 @@ public class LambdaToSqlTranslator<T> : ExpressionVisitor, IDisposable {
     private static readonly MethodInfo? StringEndWithMethodInfo = typeof(string).GetMethod(nameof(string.EndsWith), new[] { typeof(string) });
     private static readonly MethodInfo? StringEndsWithWithStringComparisonMethodInfo = typeof(string).GetMethod(nameof(string.StartsWith), new[] { typeof(string), typeof(StringComparison) });
 
-    public string Translate(TableDescriptor tableDescriptor, Expression? expression) {
+    public string Translate(TableDescriptor tableDescriptor, Expression? expression, Expression? filter) {
         AddSelect();
         AddColumns();
         AddFrom(tableDescriptor);
 
-        if (expression != null)
+        if(expression != null) {
             AddWhere(expression);
+            _sqlAccumulator.Append(" AND ");
+            Visit(filter);
+        } else if(filter != null) {
+            AddWhere(filter);
+        }
 
         return _sqlAccumulator.ToString();
     }

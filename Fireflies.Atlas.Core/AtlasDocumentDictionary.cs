@@ -1,5 +1,6 @@
 ﻿using System.Collections.Concurrent;
 using System.Linq.Expressions;
+using System.Reflection;
 using Fireflies.Atlas.Core.Helpers;
 using Fireflies.Logging.Abstractions;
 
@@ -27,7 +28,7 @@ public class AtlasDocumentDictionary<TDocument> : AtlasDocumentDictionary, IDocu
         _logger = _atlas.LoggerFactory.GetLogger<AtlasDocumentDictionary<TDocument>>();
     }
 
-    internal AtlasSource Source { get; set; } = null!;
+    internal AtlasSource<TDocument> Source { get; set; } = null!;
     internal AtlasRelation<TDocument>[] Relations { get; set; } = null!;
     internal Func<TDocument, QueryContext, AtlasRelation<TDocument>[], TDocument> ProxyFactory { get; set; } = null!;
 
@@ -50,9 +51,8 @@ public class AtlasDocumentDictionary<TDocument> : AtlasDocumentDictionary, IDocu
         });
 
         if(updated || forceEvent) {
-            foreach(var index in _indexes) {
+            foreach(var index in _indexes)
                 index.Remove(document);
-            }
         }
 
         foreach(var index in _indexes) {
@@ -72,6 +72,11 @@ public class AtlasDocumentDictionary<TDocument> : AtlasDocumentDictionary, IDocu
     public void DeleteDocument(TDocument document) {
         var key = document.CalculateKey();
         if(_documents.TryRemove(key, out _)) {
+            _logger.Debug(() => $"Document was deleted. New: {document.AsString()}");
+
+            foreach(var index in _indexes)
+                index.Remove(document);
+
             Deleted?.Invoke(document);
         }
     }
@@ -203,6 +208,15 @@ public class AtlasDocumentDictionary<TDocument> : AtlasDocumentDictionary, IDocu
         _indexes.Add(new FieldIndex<TDocument, TProperty>(property));
     }
 
+    public override void Dispose() {
+        Source.Dispose();
+    }
+
+    public async Task TriggerUpdate<TDocument>(Expression<Func<TDocument, bool>> predicate) where TDocument : new() {
+        foreach(var affectedDocument in await InternalGetDocuments(predicate, new QueryContext(), true))
+            Updated?.Invoke(affectedDocument, affectedDocument);
+    }
+
     private class WhereAggregateVisitor : ExpressionVisitor {
         private Expression? _combinedExpression;
 
@@ -253,6 +267,15 @@ public class AtlasDocumentDictionary<TDocument> : AtlasDocumentDictionary, IDocu
             return node;
         }
 
+        protected override Expression VisitMember(MemberExpression node) {
+            if(node.Expression is not ConstantExpression constantExpression)
+                return base.VisitMember(node);
+
+            var fieldInfo = node.Member as FieldInfo;
+            var value = fieldInfo.GetValue(constantExpression.Value);
+            return Expression.Constant(value);
+        }
+
         protected override Expression VisitBinary(BinaryExpression node) {
             if(node is { Left: ConstantExpression } and not { Right: ConstantExpression }) {
                 node = Expression.MakeBinary(node.NodeType, node.Right, node.Left);
@@ -262,14 +285,5 @@ public class AtlasDocumentDictionary<TDocument> : AtlasDocumentDictionary, IDocu
                 VisitAndConvert(node.Conversion, nameof(VisitBinary)),
                 Visit(node.Right));
         }
-    }
-
-    public override void Dispose() {
-        Source.Dispose();
-    }
-
-    public async Task TriggerUpdate<TDocument>(Expression<Func<TDocument, bool>> predicate) where TDocument : new() {
-        foreach(var affectedDocument in await InternalGetDocuments(predicate, new QueryContext(), true))
-            Updated?.Invoke(affectedDocument, affectedDocument);
     }
 }

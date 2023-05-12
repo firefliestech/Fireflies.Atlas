@@ -19,14 +19,14 @@ public class SqlServerSource : IDisposable {
         _updateFetcher = new SqlMonitor(_connectionString, atlas);
     }
 
-    public async Task<(bool Cache, IEnumerable<TDocument> Documents)> GetDocuments<TDocument>(Expression<Func<TDocument, bool>>? predicate, TableDescriptor tableDescriptor) where TDocument : new() {
-        return (true, await InternalGetDocuments(predicate, tableDescriptor));
+    public async Task<(bool Cache, IEnumerable<TDocument> Documents)> GetDocuments<TDocument>(Expression<Func<TDocument, bool>>? predicate, TableDescriptor tableDescriptor, Expression<Func<TDocument, bool>>? filter) where TDocument : new() {
+        return (true, await InternalGetDocuments(predicate, tableDescriptor, filter));
     }
 
-    private async Task<IEnumerable<TDocument>> InternalGetDocuments<TDocument>(Expression<Func<TDocument, bool>>? predicate, TableDescriptor tableDescriptor) where TDocument : new() {
-        _updateFetcher.MonitorTable<TDocument>(tableDescriptor);
+    private async Task<IEnumerable<TDocument>> InternalGetDocuments<TDocument>(Expression<Func<TDocument, bool>>? predicate, TableDescriptor tableDescriptor, Expression<Func<TDocument, bool>>? filter) where TDocument : new() {
+        _updateFetcher.MonitorTable(tableDescriptor, filter);
         using var lambdaToSqlTranslator = new LambdaToSqlTranslator<TDocument>();
-        var query = lambdaToSqlTranslator.Translate(tableDescriptor, predicate);
+        var query = lambdaToSqlTranslator.Translate(tableDescriptor, predicate, filter);
         await using var connection = new SqlConnection(_connectionString);
         connection.Open();
         return (await connection.QueryAsync<TDocument>(query)).ToArray();

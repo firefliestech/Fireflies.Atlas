@@ -4,10 +4,11 @@ using Fireflies.Atlas.Core.Wrapper;
 namespace Fireflies.Atlas.Core;
 
 public abstract class AtlasDocumentBuilder {
-    internal AtlasSource Source { get; set; }
     internal Type DocumentType { get; set; }
 
     public bool Preload { get; internal set; }
+    public AtlasSource Source { get; set; }
+
     internal abstract Task PreBuild(Atlas atlas);
     internal abstract Task PostBuild(Atlas atlas);
 }
@@ -17,7 +18,7 @@ public class AtlasDocumentBuilder<TDocument> : AtlasDocumentBuilder where TDocum
     private readonly WrapperGenerator _wrapperGenerator;
     private readonly AtlasDocumentDictionary<TDocument> _dictionary;
     private readonly List<AtlasRelation<TDocument>> _relations = new();
-
+    
     internal AtlasDocumentBuilder(Atlas atlas, WrapperGenerator wrapperGenerator) {
         _atlas = atlas;
         _wrapperGenerator = wrapperGenerator;
@@ -54,7 +55,7 @@ public class AtlasDocumentBuilder<TDocument> : AtlasDocumentBuilder where TDocum
         return Task.CompletedTask;
     }
 
-    public AtlasDocumentBuilder<TDocument> AddSource(AtlasSource source) {
+    public AtlasDocumentBuilder<TDocument> AddSource(AtlasSource<TDocument> source) {
         Source = source;
         _dictionary.Source = source;
         return this;

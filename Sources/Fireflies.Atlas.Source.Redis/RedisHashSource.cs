@@ -3,7 +3,7 @@ using Fireflies.Atlas.Core;
 
 namespace Fireflies.Atlas.Source.Redis;
 
-public class RedisHashSource : AtlasSource {
+public class RedisHashSource<TDocument> : AtlasSource<TDocument> where TDocument : new() {
     private readonly RedisSource _source;
     private readonly HashDescriptor _hashDescriptor;
 
@@ -12,7 +12,7 @@ public class RedisHashSource : AtlasSource {
         _hashDescriptor = hashDescriptor;
     }
 
-    public override Task<(bool Cache, IEnumerable<TDocument> Documents)> GetDocuments<TDocument>(Expression<Func<TDocument, bool>>? predicate) {
+    public override Task<(bool Cache, IEnumerable<TDocument> Documents)> GetDocuments(Expression<Func<TDocument, bool>>? predicate) {
         return _source.GetDocuments(predicate, _hashDescriptor);
     }
 
