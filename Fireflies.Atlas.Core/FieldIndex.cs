@@ -21,16 +21,20 @@ public class FieldIndex<TDocument, TProperty> : FieldIndex<TDocument> {
         var key = _keyAccessor(document);
         if (key == null)
             return;
+
         var list = _indexedDocuments.GetOrAdd(key, new List<TDocument>());
         list.Add(document);
     }
 
     public override void Remove(TDocument document) {
         var key = _keyAccessor(document);
-        var documentKey = document.CalculateKey();
+        if(key == null)
+            return;
+
         if(!_indexedDocuments.TryGetValue(key, out var list))
             return;
 
+        var documentKey = document.CalculateKey();
         for(var i = list.Count - 1; i >= 0; i--) {
             if(list[i].CalculateKey() == documentKey)
                 list.RemoveAt(i);
