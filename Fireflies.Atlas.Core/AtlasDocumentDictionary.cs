@@ -39,10 +39,10 @@ public class AtlasDocumentDictionary<TDocument> : AtlasDocumentDictionary, IDocu
         _logger.Trace(() => $"Preloading done! {_documents.Count} documents loaded.");
     }
 
-    internal void UpdateDocument(TDocument document, bool forceEvent = false) {
+    internal void UpdateDocument(TDocument document) {
         var updated = false;
 
-        TDocument oldDocument = default;
+        TDocument? oldDocument = default;
         var key = document.CalculateKey();
         _documents.AddOrUpdate(key, _ => document, (_, oldValue) => {
             updated = !DocumentComparer.Equals(document, oldValue);
@@ -50,16 +50,16 @@ public class AtlasDocumentDictionary<TDocument> : AtlasDocumentDictionary, IDocu
             return document;
         });
 
-        if(updated || forceEvent) {
+        if(updated) {
             foreach(var index in _indexes)
-                index.Remove(document);
+                index.Remove(oldDocument!);
         }
 
         foreach(var index in _indexes) {
             index.Add(document);
         }
 
-        if(updated || forceEvent) {
+        if(updated) {
             _logger.Debug(() => $"Document was updated. New: {document.AsString()}. Old: {oldDocument.AsString()}");
 
             Updated?.Invoke(ProxyFactory(document, new QueryContext(), Relations),
