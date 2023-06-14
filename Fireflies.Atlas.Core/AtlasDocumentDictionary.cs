@@ -268,12 +268,30 @@ public class AtlasDocumentDictionary<TDocument> : AtlasDocumentDictionary, IDocu
         }
 
         protected override Expression VisitMember(MemberExpression node) {
-            if(node.Expression is not ConstantExpression constantExpression)
-                return base.VisitMember(node);
+            if(node.Expression is ConstantExpression constantExpression) {
+                if(node.Member is PropertyInfo propertyInfo) {
+                    var value = propertyInfo.GetValue(constantExpression.Value);
+                    return Expression.Constant(value);
+                }
 
-            var fieldInfo = node.Member as FieldInfo;
-            var value = fieldInfo.GetValue(constantExpression.Value);
-            return Expression.Constant(value);
+                if(node.Member is FieldInfo fieldInfo) {
+                    var value = fieldInfo.GetValue(constantExpression.Value);
+                    return Expression.Constant(value);
+                }
+
+                throw new NotSupportedException($"Constant expressions with member type '{node.Member.MemberType}' is not supported");
+            }
+
+            if(node.Expression is MemberExpression memberExpression) {
+                var subNode = VisitMember(memberExpression);
+                if(subNode is ConstantExpression constantSubExpression) {
+                    return Visit(node.Update(constantSubExpression));
+                }
+
+                return Visit(subNode);
+            }
+
+            return base.VisitMember(node);
         }
 
         protected override Expression VisitBinary(BinaryExpression node) {
@@ -281,9 +299,17 @@ public class AtlasDocumentDictionary<TDocument> : AtlasDocumentDictionary, IDocu
                 node = Expression.MakeBinary(node.NodeType, node.Right, node.Left);
             }
 
-            return node.Update(Visit(node.Left),
-                VisitAndConvert(node.Conversion, nameof(VisitBinary)),
-                Visit(node.Right));
+            var left = Visit(node.Left);
+            var leftIsNullableType = Nullable.GetUnderlyingType(left.Type) != null;
+            
+            var right = Visit(node.Right);
+            var rightIsNullableType = Nullable.GetUnderlyingType(right.Type) != null;
+
+            return leftIsNullableType switch {
+                true when !rightIsNullableType => node.Update(left, VisitAndConvert(node.Conversion, nameof(VisitBinary)), Expression.Convert(right, left.Type)),
+                false when rightIsNullableType => node.Update(Expression.Convert(left, right.Type), VisitAndConvert(node.Conversion, nameof(VisitBinary)), right),
+                _ => node.Update(left, VisitAndConvert(node.Conversion, nameof(VisitBinary)), right)
+            };
         }
     }
 }

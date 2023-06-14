@@ -4,11 +4,20 @@ namespace Fireflies.Atlas.Core;
 
 public static class ExpressionHelper {
     public static (MemberExpression MemberExpression, ConstantExpression ConstantExpression)? GetMemberAndConstant(BinaryExpression binaryExpression) {
-        var memberExpression = binaryExpression.Left as MemberExpression ?? binaryExpression.Right as MemberExpression;
+        var left = binaryExpression.Left;
+        if(left is UnaryExpression { NodeType: ExpressionType.Convert } leftUnary) {
+            left = leftUnary.Operand;
+        }
+
+        var right = binaryExpression.Right;
+        if(right is UnaryExpression { NodeType: ExpressionType.Convert } rightUnary)
+            right = rightUnary.Operand;
+
+        var memberExpression = left as MemberExpression ?? right as MemberExpression;
         if (memberExpression == null)
             return null;
 
-        var otherExpression = binaryExpression.Left is MemberExpression ? binaryExpression.Right : binaryExpression.Left;
+        var otherExpression = left is MemberExpression ? right : left;
         if (otherExpression is ConstantExpression constantExpression)
             return (memberExpression, constantExpression);
 
