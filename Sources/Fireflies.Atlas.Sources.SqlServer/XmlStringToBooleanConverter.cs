@@ -12,6 +12,12 @@ public class XmlStringToBooleanConverter : System.Text.Json.Serialization.JsonCo
         if(value == null)
             return false;
 
+        if(value == "1")
+            return true;
+
+        if(value == "0")
+            return false;
+
         return bool.TryParse(value, out var boolValue) && boolValue;
     }
 
