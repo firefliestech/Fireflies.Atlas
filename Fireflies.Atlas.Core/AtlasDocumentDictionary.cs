@@ -45,7 +45,7 @@ public class AtlasDocumentDictionary<TDocument> : AtlasDocumentDictionary, IDocu
         TDocument? oldDocument = default;
         var key = document.CalculateKey();
         _documents.AddOrUpdate(key, _ => document, (_, oldValue) => {
-            updated = !DocumentComparer.Equals(document, oldValue);
+            updated = true;
             oldDocument = oldValue;
             return document;
         });
@@ -271,12 +271,12 @@ public class AtlasDocumentDictionary<TDocument> : AtlasDocumentDictionary, IDocu
             if(node.Expression is ConstantExpression constantExpression) {
                 if(node.Member is PropertyInfo propertyInfo) {
                     var value = propertyInfo.GetValue(constantExpression.Value);
-                    return Expression.Constant(value);
+                    return Expression.Constant(value, node.Type);
                 }
 
                 if(node.Member is FieldInfo fieldInfo) {
                     var value = fieldInfo.GetValue(constantExpression.Value);
-                    return Expression.Constant(value);
+                    return Expression.Constant(value, node.Type);
                 }
 
                 throw new NotSupportedException($"Constant expressions with member type '{node.Member.MemberType}' is not supported");

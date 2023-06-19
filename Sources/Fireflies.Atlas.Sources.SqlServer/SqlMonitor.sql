@@ -89,7 +89,6 @@ BEGIN
 		SET @Table = replace(replace(@Table, ''['', ''''), '']'', '''')
 		SET @TriggerName = ''[Fireflies_'' + @Table + ''_Monitor]''
 
-		
 		IF NOT EXISTS (SELECT * FROM [Fireflies].[Monitor] WHERE replace(replace([Schema], ''['', ''''), '']'', '''') = @Schema AND replace(replace([Table], ''['', ''''), '']'', '''') = @Table) BEGIN
 			IF EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(''['' + @Schema + ''].'' + @TriggerName)) BEGIN
 				SET @Sql = ''DROP TRIGGER ['' + @Schema + ''].'' + @TriggerName
