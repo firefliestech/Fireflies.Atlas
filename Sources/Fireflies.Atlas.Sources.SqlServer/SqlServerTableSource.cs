@@ -14,11 +14,12 @@ public class SqlServerTableSource<TDocument> : AtlasSource<TDocument> where TDoc
         _filter = filter;
     }
 
-    public override Task<(bool Cache, IEnumerable<TDocument> Documents)> GetDocuments(Expression<Func<TDocument, bool>>? predicate) {
-        return _source.GetDocuments(predicate, _tableDescriptor, _filter);
+    public override Task<(bool Cache, IEnumerable<TDocument> Documents)> GetDocuments(Expression<Func<TDocument, bool>>? predicate, ExecutionFlags flags) {
+        return _source.GetDocuments(predicate, _tableDescriptor, _filter, flags);
     }
 
     public override void Dispose() {
         _source.Dispose();
     }
 }
+

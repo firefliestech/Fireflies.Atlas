@@ -23,40 +23,44 @@ public class Atlas : IDisposable {
         }
     }
 
-    internal AtlasDocumentDictionary<TDocument> Add<TDocument>() where TDocument : new() {
-        return (AtlasDocumentDictionary<TDocument>)_dictionaries.GetOrAdd(typeof(TDocument), new AtlasDocumentDictionary<TDocument>(this));
+    public Task<TDocument?> GetDocument<TDocument>(Expression<Func<TDocument, bool>> predicate, ExecutionFlags flags = ExecutionFlags.None) where TDocument : new() {
+        return GetDocument<TDocument>(predicate, new QueryContext(), flags);
     }
 
-    public Task<TDocument?> GetDocument<TDocument>(Expression<Func<TDocument, bool>> predicate) where TDocument : new() {
-        return GetDocument<TDocument>(predicate, new QueryContext());
+    public Task<TDocument?> GetDocument<TDocument>(Expression predicate, ExecutionFlags flags = ExecutionFlags.None) where TDocument : new() {
+        return GetDocument<TDocument>(predicate, new QueryContext(), flags);
     }
 
-    public Task<TDocument?> GetDocument<TDocument>(Expression predicate) where TDocument : new() {
-        return GetDocument<TDocument>(predicate, new QueryContext());
+    public Task<IEnumerable<TDocument>> GetDocuments<TDocument>(ExecutionFlags flags = ExecutionFlags.None) where TDocument : new() {
+        return GetDocuments<TDocument>(x => true, flags);
     }
 
-    internal async Task<TDocument?> GetDocument<TDocument>(Expression predicate, QueryContext queryContext) where TDocument : new() {
-        var result = await GetDocuments<TDocument>(predicate, queryContext);
-        return result.FirstOrDefault();
+    public Task<IEnumerable<TDocument>> GetDocuments<TDocument>(Expression<Func<TDocument, bool>> predicate, ExecutionFlags flags = ExecutionFlags.None) where TDocument : new() {
+        return GetDocuments<TDocument>((Expression)predicate, flags);
     }
 
-    public Task<IEnumerable<TDocument>> GetDocuments<TDocument>(Expression<Func<TDocument, bool>>? predicate = null) where TDocument : new() {
-        return GetDocuments<TDocument>((Expression)predicate);
-    }
-
-    public async Task<IEnumerable<TDocument>> GetDocuments<TDocument>(Expression predicate = null) where TDocument : new() {
+    public async Task<IEnumerable<TDocument>> GetDocuments<TDocument>(Expression predicate, ExecutionFlags flags = ExecutionFlags.None) where TDocument : new() {
         var startedAt = DateTimeOffset.UtcNow;
 
-        var result = await GetDocuments<TDocument>(predicate, new QueryContext());
+        var result = await GetDocuments<TDocument>(predicate, new QueryContext(), flags);
         _logger.Trace(() => $"Got {result.Count()} documents in {(DateTimeOffset.UtcNow - startedAt).TotalMilliseconds}ms. Predicate: {predicate}");
 
         return result;
     }
 
-    internal Task<IEnumerable<TDocument>> GetDocuments<TDocument>(Expression predicate, QueryContext queryContext) where TDocument : new() {
+    internal async Task<TDocument?> GetDocument<TDocument>(Expression predicate, QueryContext queryContext, ExecutionFlags flags = ExecutionFlags.None) where TDocument : new() {
+        var result = await GetDocuments<TDocument>(predicate, queryContext, flags);
+        return result.FirstOrDefault();
+    }
+
+    internal Task<IEnumerable<TDocument>> GetDocuments<TDocument>(Expression predicate, QueryContext queryContext, ExecutionFlags flags = ExecutionFlags.None) where TDocument : new() {
         var dictionary = InternalGetDictionary<TDocument>();
-        var result = dictionary == null ? Task.FromResult(Enumerable.Empty<TDocument>()) : dictionary.GetDocuments(predicate, queryContext);
+        var result = dictionary == null ? Task.FromResult(Enumerable.Empty<TDocument>()) : dictionary.GetDocuments(predicate, queryContext, flags);
         return result;
+    }
+
+    internal AtlasDocumentDictionary<TDocument> Add<TDocument>() where TDocument : new() {
+        return (AtlasDocumentDictionary<TDocument>)_dictionaries.GetOrAdd(typeof(TDocument), new AtlasDocumentDictionary<TDocument>(this));
     }
 
     public void UpdateDocument<TDocument>(TDocument document) where TDocument : new() {

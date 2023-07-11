@@ -21,8 +21,10 @@ public class LambdaToSqlTranslator<T> : ExpressionVisitor, IDisposable {
 
         if(expression != null) {
             AddWhere(expression);
-            _sqlAccumulator.Append(" AND ");
-            Visit(filter);
+            if(filter != null) {
+                _sqlAccumulator.Append(" AND ");
+                Visit(filter);
+            }
         } else if(filter != null) {
             AddWhere(filter);
         }

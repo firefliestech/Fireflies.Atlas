@@ -12,7 +12,7 @@ public class RedisHashSource<TDocument> : AtlasSource<TDocument> where TDocument
         _hashDescriptor = hashDescriptor;
     }
 
-    public override Task<(bool Cache, IEnumerable<TDocument> Documents)> GetDocuments(Expression<Func<TDocument, bool>>? predicate) {
+    public override Task<(bool Cache, IEnumerable<TDocument> Documents)> GetDocuments(Expression<Func<TDocument, bool>>? predicate, ExecutionFlags flags) {
         return _source.GetDocuments(predicate, _hashDescriptor);
     }
 

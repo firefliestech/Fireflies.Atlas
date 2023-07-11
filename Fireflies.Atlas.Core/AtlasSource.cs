@@ -7,5 +7,5 @@ public abstract class AtlasSource : IDisposable {
 }
 
 public abstract class AtlasSource<TDocument> : AtlasSource where TDocument : new() {
-    public abstract Task<(bool Cache, IEnumerable<TDocument> Documents)> GetDocuments(Expression<Func<TDocument, bool>>? predicate);
+    public abstract Task<(bool Cache, IEnumerable<TDocument> Documents)> GetDocuments(Expression<Func<TDocument, bool>>? predicate, ExecutionFlags flags);
 }
