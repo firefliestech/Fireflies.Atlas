@@ -33,9 +33,9 @@ public class AtlasRelation<TDocument, TForeign> : AtlasRelation<TDocument> where
         var queryExpression = Expression.Lambda<Func<TForeign, bool>>(replacedExpression.Expression, _matchExpression.Parameters.Last());
         object? foreign;
         if (_propertyInfo.PropertyType.IsAssignableTo(typeof(IEnumerable<TForeign>))) {
-            foreign = await _atlas.GetDocuments<TForeign>(queryExpression, queryContext);
+            foreign = await _atlas.GetDocuments<TForeign>(queryExpression, queryContext).ConfigureAwait(false);
         } else {
-            foreign = await _atlas.GetDocument<TForeign>(queryExpression, queryContext);
+            foreign = await _atlas.GetDocument<TForeign>(queryExpression, queryContext).ConfigureAwait(false);
         }
 
         return foreign;

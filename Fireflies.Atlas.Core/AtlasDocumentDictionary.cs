@@ -35,7 +35,7 @@ public class AtlasDocumentDictionary<TDocument> : AtlasDocumentDictionary, IDocu
     internal async Task Preload() {
         _preloaded = true;
         _logger.Debug(() => "Preloading...");
-        await LoadDocumentsFromSource(null, ExecutionFlags.None);
+        await LoadDocumentsFromSource(null, ExecutionFlags.None).ConfigureAwait(false);
         _logger.Trace(() => $"Preloading done! {_documents.Count} documents loaded.");
     }
 
@@ -82,7 +82,7 @@ public class AtlasDocumentDictionary<TDocument> : AtlasDocumentDictionary, IDocu
     }
 
     public async Task<IEnumerable<TDocument>> GetDocuments(Expression predicate, QueryContext queryContext, ExecutionFlags flags) {
-        return await InternalGetDocuments(predicate, queryContext, false, flags);
+        return await InternalGetDocuments(predicate, queryContext, false, flags).ConfigureAwait(false);
     }
 
     private async Task<IEnumerable<TDocument>> InternalGetDocuments(Expression predicate, QueryContext queryContext, bool noLoad, ExecutionFlags flags) {
@@ -122,7 +122,7 @@ public class AtlasDocumentDictionary<TDocument> : AtlasDocumentDictionary, IDocu
             _logger.Trace(() => $"Documents were preloaded. Searching in cache. Documents found: {result.Length}. Predicate: {normalizedExpression}");
         } else {
             _logger.Trace(() => $"Documents were not preloaded. Searching in source. Predicate: {predicate}");
-            result = await LoadDocumentsFromSource(normalizedExpression, flags);
+            result = await LoadDocumentsFromSource(normalizedExpression, flags).ConfigureAwait(false);
             _logger.Trace(() => $"Documents were not preloaded. Searching in source. Documents found: {result.Length}. Predicate: {normalizedExpression}");
         }
 
@@ -178,7 +178,7 @@ public class AtlasDocumentDictionary<TDocument> : AtlasDocumentDictionary, IDocu
 
     private async Task<TDocument[]> LoadDocumentsFromSource(Expression<Func<TDocument, bool>>? predicate, ExecutionFlags flags) {
         _logger.Trace(() => $"Getting documents from source. Predicate: {predicate}");
-        var (cache, documents) = await Source.GetDocuments(predicate, flags);
+        var (cache, documents) = await Source.GetDocuments(predicate, flags).ConfigureAwait(false);
 
         var result = new List<TDocument>();
         foreach(var document in documents.ToArray()) {
@@ -213,7 +213,7 @@ public class AtlasDocumentDictionary<TDocument> : AtlasDocumentDictionary, IDocu
     }
 
     public async Task TriggerUpdate<TDocument>(Expression<Func<TDocument, bool>> predicate) where TDocument : new() {
-        foreach(var affectedDocument in await InternalGetDocuments(predicate, new QueryContext(), true, ExecutionFlags.None))
+        foreach(var affectedDocument in await InternalGetDocuments(predicate, new QueryContext(), true, ExecutionFlags.None).ConfigureAwait(false))
             Updated?.Invoke(affectedDocument, affectedDocument);
     }
 

@@ -21,7 +21,7 @@ public class SqlServerSource : IDisposable {
     }
 
     public async Task<(bool Cache, IEnumerable<TDocument> Documents)> GetDocuments<TDocument>(Expression<Func<TDocument, bool>>? predicate, TableDescriptor tableDescriptor, Expression<Func<TDocument, bool>>? filter, ExecutionFlags flags) where TDocument : new() {
-        var documents = await InternalGetDocuments(predicate, tableDescriptor, filter, flags);
+        var documents = await InternalGetDocuments(predicate, tableDescriptor, filter, flags).ConfigureAwait(false);
         return (!flags.HasFlag(ExecutionFlags.DontCache), documents);
     }
 
@@ -32,7 +32,7 @@ public class SqlServerSource : IDisposable {
         var query = lambdaToSqlTranslator.Translate(tableDescriptor, predicate, flags.HasFlag(ExecutionFlags.BypassFilter) ? null : filter);
         await using var connection = new SqlConnection(_connectionString);
         connection.Open();
-        return (await connection.QueryAsync<TDocument>(query)).ToArray();
+        return (await connection.QueryAsync<TDocument>(query).ConfigureAwait(false)).ToArray();
     }
 
     public void Dispose() {

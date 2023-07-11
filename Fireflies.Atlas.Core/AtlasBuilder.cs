@@ -41,11 +41,11 @@ public class AtlasBuilder {
             if(builder.Source == null)
                 throw new NullReferenceException($"Source for {builder.DocumentType.Name} must be set");
 
-            await builder.PreBuild(_atlas);
+            await builder.PreBuild(_atlas).ConfigureAwait(false);
         }
 
         foreach(var builder in _builders) {
-            await builder.PostBuild(_atlas);
+            await builder.PostBuild(_atlas).ConfigureAwait(false);
         }
 
         return _atlas;

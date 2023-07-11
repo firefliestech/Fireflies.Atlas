@@ -42,14 +42,14 @@ public class Atlas : IDisposable {
     public async Task<IEnumerable<TDocument>> GetDocuments<TDocument>(Expression predicate, ExecutionFlags flags = ExecutionFlags.None) where TDocument : new() {
         var startedAt = DateTimeOffset.UtcNow;
 
-        var result = await GetDocuments<TDocument>(predicate, new QueryContext(), flags);
+        var result = await GetDocuments<TDocument>(predicate, new QueryContext(), flags).ConfigureAwait(false);
         _logger.Trace(() => $"Got {result.Count()} documents in {(DateTimeOffset.UtcNow - startedAt).TotalMilliseconds}ms. Predicate: {predicate}");
 
         return result;
     }
 
     internal async Task<TDocument?> GetDocument<TDocument>(Expression predicate, QueryContext queryContext, ExecutionFlags flags = ExecutionFlags.None) where TDocument : new() {
-        var result = await GetDocuments<TDocument>(predicate, queryContext, flags);
+        var result = await GetDocuments<TDocument>(predicate, queryContext, flags).ConfigureAwait(false);
         return result.FirstOrDefault();
     }
 
