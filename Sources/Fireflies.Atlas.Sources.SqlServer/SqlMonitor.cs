@@ -96,9 +96,7 @@ public class SqlMonitor : IDisposable {
             _timer.Change(TimeSpan.FromSeconds(20), TimeSpan.FromSeconds(20));
         }
 
-        AddMonitor(tableDescriptor);
-
-        _monitors.TryAdd(tableDescriptor, jsonDocument => {
+        var monitorAdded = _monitors.TryAdd(tableDescriptor, jsonDocument => {
             var compiledFilter = filter?.CompileFast();
 
             var insertedRow = jsonDocument["inserted"]?["row"];
@@ -110,13 +108,16 @@ public class SqlMonitor : IDisposable {
                     _atlas.UpdateDocument(document);
                 }
             } else {
-                var deletedRow = jsonDocument["deleted"]!["row"];
+                var deletedRow = jsonDocument["deleted"]?["row"];
                 if(deletedRow != null) {
                     var document = deletedRow.Deserialize<TDocument>(_serializerOptions);
                     _atlas.DeleteDocument(document);
                 }
             }
         });
+
+        if(monitorAdded)
+            AddMonitor(tableDescriptor);
     }
 
     private void AddMonitor(TableDescriptor tableDescriptor) {
