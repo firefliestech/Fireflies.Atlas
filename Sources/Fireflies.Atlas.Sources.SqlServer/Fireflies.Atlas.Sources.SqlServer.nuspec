@@ -13,7 +13,7 @@
 	<dependencies>
 		<dependency id="Fireflies.Atlas.Core" version="$version$" />
 		<dependency id="Dapper" version="2.0.123" />
-		<dependency id="Microsoft.Data.SqlClient" version="5.1.0" />
+		<dependency id="Microsoft.Data.SqlClient" version="5.1.1" />
 		<dependency id="Newtonsoft.Json" version="13.0.3" />
 	</dependencies>
 </package>
