@@ -6,6 +6,43 @@ IF NOT EXISTS (SELECT * FROM sys.schemas WHERE name = N'Fireflies' ) BEGIN
 	EXEC('CREATE SCHEMA [Fireflies]')
 END
 
+IF NOT EXISTS(SELECT * FROM sys.objects WHERE object_id=OBJECT_ID('[Fireflies].[ProcessQueue]')) BEGIN
+	SET @Sql='
+	CREATE PROCEDURE [Fireflies].[ProcessQueue]	AS
+	DECLARE	@conversation uniqueidentifier,	@senderMsgType nvarchar(100), @msg xml;
+
+	WAITFOR (
+		RECEIVE TOP(1)
+			@conversation=conversation_handle,
+			@msg=message_body,
+			@senderMsgType=message_type_name
+		FROM Fireflies.UpdateQueue);
+
+		IF (@senderMsgType = ''FirefliesUpdate'')
+			INSERT INTO [Fireflies].[Update] ([Schema], [Table], [Data]) VALUES (@msg.value(''(root/schema)[1]'', ''nvarchar(50)''), @msg.value(''(root/table)[1]'', ''nvarchar(50)''), CONVERT(NVARCHAR(MAX), @msg));
+
+	END CONVERSATION @conversation;
+	'
+	EXEC sp_executesql @Sql
+END
+
+/* Queues */
+IF NOT EXISTS(SELECT * FROM sys.service_message_types WHERE name='FirefliesUpdate') BEGIN
+	CREATE MESSAGE TYPE FirefliesUpdate AUTHORIZATION dbo VALIDATION = None
+END
+
+IF NOT EXISTS(SELECT * FROM sys.service_contracts where name='FirefliesContract') BEGIN
+	CREATE CONTRACT FirefliesContract (FirefliesUpdate SENT BY ANY)
+END
+
+IF NOT EXISTS(SELECT * FROM sys.service_queues WHERE object_id=OBJECT_ID(N'[Fireflies].[UpdateQueue]')) BEGIN
+	CREATE QUEUE [Fireflies].[UpdateQueue] WITH STATUS = ON, RETENTION = OFF, ACTIVATION (STATUS=ON, PROCEDURE_NAME=[Fireflies].[ProcessQueue], EXECUTE AS SELF, MAX_QUEUE_READERS=1)
+END
+
+IF NOT EXISTS(SELECT * FROM sys.services WHERE name='FirefliesUpdateService') BEGIN
+	CREATE SERVICE FirefliesUpdateService AUTHORIZATION dbo ON QUEUE [Fireflies].[UpdateQueue] (FirefliesContract)
+END
+
 /* Monitor */
 
 IF NOT EXISTS (SELECT * FROM sysobjects WHERE id=OBJECT_ID(N'[Fireflies].[Monitor]')) BEGIN
@@ -60,8 +97,10 @@ BEGIN
 				END 
 
 				IF @haveData = 1 BEGIN
-					SET @message = N''''<root>'''' + @message + N''''</root>''''
-					INSERT INTO [Fireflies].[Update] ([Schema], [Table], [Data]) VALUES (''''['' + @Schema + '']'''', ''''['' + @Table + '']'''', @message)
+					SET @message = N''''<root><schema>'' + @Schema + ''</schema><table>'' + @Table + ''</table>'''' + @message + N''''</root>''''
+					DECLARE @Handle UNIQUEIDENTIFIER;
+					BEGIN DIALOG @Handle FROM SERVICE FirefliesUpdateService TO SERVICE ''''FirefliesUpdateService'''' ON CONTRACT [FirefliesContract] WITH ENCRYPTION = OFF;
+					SEND ON CONVERSATION @Handle MESSAGE TYPE FirefliesUpdate(@message);
 				END
 			END''
 			EXEC sp_executesql @Sql
