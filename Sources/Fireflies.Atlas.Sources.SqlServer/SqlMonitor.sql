@@ -6,43 +6,6 @@ IF NOT EXISTS (SELECT * FROM sys.schemas WHERE name = N'Fireflies' ) BEGIN
 	EXEC('CREATE SCHEMA [Fireflies]')
 END
 
-IF NOT EXISTS(SELECT * FROM sys.objects WHERE object_id=OBJECT_ID('[Fireflies].[ProcessQueue]')) BEGIN
-	SET @Sql='
-	CREATE PROCEDURE [Fireflies].[ProcessQueue]	AS
-	DECLARE	@conversation uniqueidentifier,	@senderMsgType nvarchar(100), @msg xml;
-
-	WAITFOR (
-		RECEIVE TOP(1)
-			@conversation=conversation_handle,
-			@msg=message_body,
-			@senderMsgType=message_type_name
-		FROM Fireflies.UpdateQueue);
-
-		IF (@senderMsgType = ''FirefliesUpdate'')
-			INSERT INTO [Fireflies].[Update] ([Schema], [Table], [Data]) VALUES (@msg.value(''(root/schema)[1]'', ''nvarchar(50)''), @msg.value(''(root/table)[1]'', ''nvarchar(50)''), CONVERT(NVARCHAR(MAX), @msg));
-
-	END CONVERSATION @conversation;
-	'
-	EXEC sp_executesql @Sql
-END
-
-/* Queues */
-IF NOT EXISTS(SELECT * FROM sys.service_message_types WHERE name='FirefliesUpdate') BEGIN
-	CREATE MESSAGE TYPE FirefliesUpdate AUTHORIZATION dbo VALIDATION = None
-END
-
-IF NOT EXISTS(SELECT * FROM sys.service_contracts where name='FirefliesContract') BEGIN
-	CREATE CONTRACT FirefliesContract (FirefliesUpdate SENT BY ANY)
-END
-
-IF NOT EXISTS(SELECT * FROM sys.service_queues WHERE object_id=OBJECT_ID(N'[Fireflies].[UpdateQueue]')) BEGIN
-	CREATE QUEUE [Fireflies].[UpdateQueue] WITH STATUS = ON, RETENTION = OFF, ACTIVATION (STATUS=ON, PROCEDURE_NAME=[Fireflies].[ProcessQueue], EXECUTE AS SELF, MAX_QUEUE_READERS=1)
-END
-
-IF NOT EXISTS(SELECT * FROM sys.services WHERE name='FirefliesUpdateService') BEGIN
-	CREATE SERVICE FirefliesUpdateService AUTHORIZATION dbo ON QUEUE [Fireflies].[UpdateQueue] (FirefliesContract)
-END
-
 /* Monitor */
 
 IF NOT EXISTS (SELECT * FROM sysobjects WHERE id=OBJECT_ID(N'[Fireflies].[Monitor]')) BEGIN
@@ -80,25 +43,26 @@ BEGIN
 				SET NOCOUNT ON;
 	
 				DECLARE @retvalOUT NVARCHAR(MAX)
-
 				DECLARE @message NVARCHAR(MAX)
-				SET @message = N''''<root><schema>'' + @Schema + ''</schema><table>'' + @Table + ''</table>''''
+				DECLARE @haveData bit
 
+				SET @haveData=0
 				SET @retvalOUT = (SELECT * FROM INSERTED FOR XML PATH(''''row''''), ROOT (''''inserted''''))
 				IF (@retvalOUT IS NOT NULL) BEGIN
-					SET @message = @message + @retvalOUT
+					SET @haveData = 1
+					SET @message = @retvalOUT
 				END
 
 				SET @retvalOUT = (SELECT * FROM DELETED FOR XML PATH(''''row''''), ROOT (''''deleted''''))
 				IF (@retvalOUT IS NOT NULL) BEGIN
+					SET @haveData = 1
 					SET @message = @message + @retvalOUT
 				END 
 
-				SET @message = @message + N''''</root>''''
-
-				DECLARE @Handle UNIQUEIDENTIFIER;
-				BEGIN DIALOG @Handle FROM SERVICE FirefliesUpdateService TO SERVICE ''''FirefliesUpdateService'''' ON CONTRACT [FirefliesContract] WITH ENCRYPTION = OFF;
-				SEND ON CONVERSATION @Handle MESSAGE TYPE FirefliesUpdate(@message);
+				IF @haveData = 1 BEGIN
+					SET @message = N''''<root>'''' + @message + N''''</root>''''
+					INSERT INTO [Fireflies].[Update] ([Schema], [Table], [Data]) VALUES (''''['' + @Schema + '']'''', ''''['' + @Table + '']'''', @message)
+				END
 			END''
 			EXEC sp_executesql @Sql
 
@@ -182,9 +146,13 @@ IF NOT EXISTS (SELECT * FROM sys.triggers WHERE object_id = OBJECT_ID(N'[Firefli
 CREATE TRIGGER [Fireflies].[Fireflies_Update_Trigger] ON [Fireflies].[Update] AFTER INSERT AS 
 BEGIN
 	SET NOCOUNT ON;
+	
+	DECLARE @maxId int
+	SET @maxId=(SELECT MAX(UpdateId) FROM INSERTED)
+	UPDATE [Fireflies].[UpdateMax] SET [UpdateId]=@maxId
+	IF (@maxId % 1000 = 0)
+		DELETE FROM [Fireflies].[Update] WHERE [AddedAt] < DATEADD(SECOND, -15, GETUTCDATE())
 
-	UPDATE [Fireflies].[UpdateMax] SET [UpdateId]=(SELECT MAX(UpdateId) FROM INSERTED)
-	DELETE FROM [Fireflies].[Update] WHERE [AddedAt] < DATEADD(SECOND, -15, GETUTCDATE())
 END'
 	EXEC sp_executesql @Sql
 	ALTER TABLE [Fireflies].[Update] ENABLE TRIGGER [Fireflies_Update_Trigger]

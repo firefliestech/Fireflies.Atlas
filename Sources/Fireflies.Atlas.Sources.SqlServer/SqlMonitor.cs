@@ -5,6 +5,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Xml.Linq;
 using FastExpressionCompiler;
+using Fireflies.Logging.Abstractions;
 using Microsoft.Data.SqlClient;
 using Newtonsoft.Json;
 using JsonSerializer = System.Text.Json.JsonSerializer;
@@ -14,7 +15,6 @@ namespace Fireflies.Atlas.Sources.SqlServer;
 public class SqlMonitor : IDisposable {
     private readonly string _connectionString;
     private readonly Core.Atlas _atlas;
-    private int _maxValue;
     private readonly Dictionary<TableDescriptor, Action<JsonObject>> _monitors = new();
     private static bool _initialized;
     private readonly Guid _uuid = Guid.NewGuid();
@@ -22,8 +22,13 @@ public class SqlMonitor : IDisposable {
     private SqlConnection? _dependencyConnection;
     private SqlDependency? _dependency;
     private readonly JsonSerializerOptions _serializerOptions;
+    private readonly IFirefliesLogger _logger;
+    private readonly SemaphoreSlim _semaphore = new(1);
+
+    private int _lastReadUpdate = 0;
 
     public SqlMonitor(string connectionString, Core.Atlas atlas) {
+        _logger = atlas.LoggerFactory.GetLogger<SqlMonitor>();
         _connectionString = connectionString;
         _atlas = atlas;
         _timer = new Timer(UpdateHeartbeat);
@@ -31,48 +36,71 @@ public class SqlMonitor : IDisposable {
     }
 
     public void StartMonitor() {
-        _dependencyConnection = new SqlConnection(_connectionString);
-        _dependencyConnection.Open();
-
+        _dependencyConnection = new SqlConnection(_connectionString + ";Application Name=fireflies");
         InternalStartMonitor(true);
     }
 
-    private void InternalStartMonitor(bool readMaxValue) {
-        using var command = new SqlCommand("SELECT [UpdateId] FROM [Fireflies].[UpdateMax]", _dependencyConnection);
-        _dependency = new SqlDependency(command);
-        _dependency.OnChange += OnDependencyChange;
+    private async void InternalStartMonitor(bool readMaxValue) {
+        try {
+            if(_dependencyConnection!.State != ConnectionState.Open)
+                _dependencyConnection.Open();
 
-        var newMaxValue = (int)command.ExecuteScalar();
-        if(readMaxValue) {
-            _maxValue = newMaxValue;
-        } else if(_maxValue != newMaxValue) {
-            OnDependencyChange(_dependency, null);
+            await using var command = new SqlCommand("SELECT [UpdateId] FROM [Fireflies].[UpdateMax]", _dependencyConnection);
+            _dependency = new SqlDependency(command);
+            _dependency.OnChange += OnDependencyChange;
+
+            var newMaxValue = (int)command.ExecuteScalar();
+            if(readMaxValue) {
+                _lastReadUpdate = newMaxValue;
+            } else if(newMaxValue != _lastReadUpdate) {
+                ReadUpdates();
+            }
+        } catch(Exception ex) {
+            _logger.Error(ex, $"Exception while running {nameof(InternalStartMonitor)}");
+            await Task.Delay(1000).ConfigureAwait(false);
+#pragma warning disable CS4014
+            Task.Run(() => InternalStartMonitor(readMaxValue));
+#pragma warning restore CS4014
         }
     }
 
     private void OnDependencyChange(object sender, SqlNotificationEventArgs? e) {
-        using var connection = new SqlConnection(_connectionString);
-        connection.Open();
-        using var command = new SqlCommand($"SELECT [UpdateId], [Schema], [Table], [Data] FROM [Fireflies].[Update] WHERE [UpdateId] > {_maxValue}", connection);
-        using var sqlDataReader = command.ExecuteReader();
-        while(sqlDataReader.Read()) {
-            var updateId = (int)sqlDataReader[0];
-            if(_maxValue < updateId)
-                _maxValue = updateId;
-
-            var tableDescriptor = new TableDescriptor((string)sqlDataReader[1], (string)sqlDataReader[2]);
-
-            if(_monitors.TryGetValue(tableDescriptor, out var callback)) {
-                var value = XDocument.Parse((string)sqlDataReader[3]);
-                var json = JsonConvert.SerializeXNode(value, Formatting.None, true);
-                var jsonDocument = JsonSerializer.Deserialize<JsonObject>(json);
-                if(jsonDocument != null)
-                    callback(jsonDocument);
-            }
+        try {
+            ReadUpdates();
+        } catch(Exception ex) {
+            _logger.Error(ex, $"Exception while running {nameof(OnDependencyChange)}");
+        } finally {
+            _dependency!.OnChange -= OnDependencyChange;
         }
 
-        _dependency!.OnChange -= OnDependencyChange;
         InternalStartMonitor(false);
+    }
+
+    private void ReadUpdates() {
+        try {
+            _semaphore.Wait();
+
+            using var connection = new SqlConnection(_connectionString);
+            connection.Open();
+            using var command = new SqlCommand($"SELECT [UpdateId], [Schema], [Table], [Data] FROM [Fireflies].[Update] WHERE [UpdateId] > {_lastReadUpdate}", connection);
+            using var sqlDataReader = command.ExecuteReader();
+            while(sqlDataReader.Read()) {
+                var updateId = (int)sqlDataReader[0];
+                if(_lastReadUpdate < updateId)
+                    _lastReadUpdate = updateId;
+                var tableDescriptor = new TableDescriptor((string)sqlDataReader[1], (string)sqlDataReader[2]);
+
+                if(_monitors.TryGetValue(tableDescriptor, out var callback)) {
+                    var value = XDocument.Parse((string)sqlDataReader[3]);
+                    var json = JsonConvert.SerializeXNode(value, Formatting.None, true);
+                    var jsonDocument = JsonSerializer.Deserialize<JsonObject>(json);
+                    if(jsonDocument != null)
+                        callback(jsonDocument);
+                }
+            }
+        } finally {
+            _semaphore.Release();
+        }
     }
 
     public void MonitorTable<TDocument>(TableDescriptor tableDescriptor, Expression<Func<TDocument, bool>>? filter) where TDocument : new() {
@@ -121,37 +149,57 @@ public class SqlMonitor : IDisposable {
     }
 
     private void AddMonitor(TableDescriptor tableDescriptor) {
-        using var connection = new SqlConnection(_connectionString);
-        connection.Open();
-        using var insertMonitorCommand = new SqlCommand("INSERT INTO [Fireflies].[Monitor] VALUES (@uuid, @schema, @table)", connection);
-        insertMonitorCommand.Parameters.Add("@uuid", SqlDbType.UniqueIdentifier).Value = _uuid;
-        insertMonitorCommand.Parameters.Add("@schema", SqlDbType.NVarChar).Value = tableDescriptor.Schema;
-        insertMonitorCommand.Parameters.Add("@table", SqlDbType.NVarChar).Value = tableDescriptor.Table;
-        insertMonitorCommand.ExecuteNonQuery();
+        try {
+            _logger.Trace($"Running {nameof(AddMonitor)}");
+            using var connection = new SqlConnection(_connectionString);
+            connection.Open();
+            using var insertMonitorCommand = new SqlCommand("INSERT INTO [Fireflies].[Monitor] VALUES (@uuid, @schema, @table)", connection);
+            insertMonitorCommand.Parameters.Add("@uuid", SqlDbType.UniqueIdentifier).Value = _uuid;
+            insertMonitorCommand.Parameters.Add("@schema", SqlDbType.NVarChar).Value = tableDescriptor.Schema;
+            insertMonitorCommand.Parameters.Add("@table", SqlDbType.NVarChar).Value = tableDescriptor.Table;
+            insertMonitorCommand.ExecuteNonQuery();
+        } catch(Exception ex) {
+            _logger.Error(ex, $"Exception while running {nameof(AddMonitor)}");
+        }
     }
 
     private void AddListener() {
-        using var connection = new SqlConnection(_connectionString);
-        connection.Open();
-        using var insertListenerCommand = new SqlCommand("INSERT INTO [Fireflies].[Listener] VALUES (@uuid, GETUTCDATE())", connection);
-        insertListenerCommand.Parameters.Add("@uuid", SqlDbType.UniqueIdentifier).Value = _uuid;
-        insertListenerCommand.ExecuteNonQuery();
+        try {
+            _logger.Trace($"Running {nameof(AddListener)}");
+            using var connection = new SqlConnection(_connectionString);
+            connection.Open();
+            using var insertListenerCommand = new SqlCommand("INSERT INTO [Fireflies].[Listener] VALUES (@uuid, GETUTCDATE())", connection);
+            insertListenerCommand.Parameters.Add("@uuid", SqlDbType.UniqueIdentifier).Value = _uuid;
+            insertListenerCommand.ExecuteNonQuery();
+        } catch(Exception ex) {
+            _logger.Error(ex, $"Exception while running {nameof(AddListener)}");
+        }
     }
 
     private void RemoveListener() {
-        using var connection = new SqlConnection(_connectionString);
-        connection.Open();
-        using var insertListenerCommand = new SqlCommand("DELETE FROM [Fireflies].[Listener] WHERE [ListenerId]=@uuid", connection);
-        insertListenerCommand.Parameters.Add("@uuid", SqlDbType.UniqueIdentifier).Value = _uuid;
-        insertListenerCommand.ExecuteNonQuery();
+        try {
+            _logger.Trace($"Running {nameof(RemoveListener)}");
+            using var connection = new SqlConnection(_connectionString);
+            connection.Open();
+            using var insertListenerCommand = new SqlCommand("DELETE FROM [Fireflies].[Listener] WHERE [ListenerId]=@uuid", connection);
+            insertListenerCommand.Parameters.Add("@uuid", SqlDbType.UniqueIdentifier).Value = _uuid;
+            insertListenerCommand.ExecuteNonQuery();
+        } catch(Exception ex) {
+            _logger.Error(ex, $"Exception while running {nameof(RemoveListener)}");
+        }
     }
 
     private void UpdateHeartbeat(object? state) {
-        using var connection = new SqlConnection(_connectionString);
-        connection.Open();
-        using var updateHeatbeatCommand = new SqlCommand("UPDATE [Fireflies].[Listener] SET LastHeartbeatAt=GETUTCDATE() WHERE [ListenerId]=@uuid", connection);
-        updateHeatbeatCommand.Parameters.Add("@uuid", SqlDbType.UniqueIdentifier).Value = _uuid;
-        updateHeatbeatCommand.ExecuteNonQuery();
+        try {
+            _logger.Trace($"Running {nameof(UpdateHeartbeat)}");
+            using var connection = new SqlConnection(_connectionString);
+            connection.Open();
+            using var updateHeartbeatCommand = new SqlCommand("UPDATE [Fireflies].[Listener] SET LastHeartbeatAt=GETUTCDATE() WHERE [ListenerId]=@uuid", connection);
+            updateHeartbeatCommand.Parameters.Add("@uuid", SqlDbType.UniqueIdentifier).Value = _uuid;
+            updateHeartbeatCommand.ExecuteNonQuery();
+        } catch(Exception ex) {
+            _logger.Error(ex, $"Exception while running {nameof(UpdateHeartbeat)}");
+        }
     }
 
     public void Dispose() {
