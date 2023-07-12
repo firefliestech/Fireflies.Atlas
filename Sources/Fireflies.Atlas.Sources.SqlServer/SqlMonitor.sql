@@ -147,12 +147,8 @@ CREATE TRIGGER [Fireflies].[Fireflies_Update_Trigger] ON [Fireflies].[Update] AF
 BEGIN
 	SET NOCOUNT ON;
 	
-	DECLARE @maxId int
-	SET @maxId=(SELECT MAX(UpdateId) FROM INSERTED)
-	UPDATE [Fireflies].[UpdateMax] SET [UpdateId]=@maxId
-	IF (@maxId % 1000 = 0)
-		DELETE FROM [Fireflies].[Update] WHERE [AddedAt] < DATEADD(SECOND, -15, GETUTCDATE())
-
+	UPDATE [Fireflies].[UpdateMax] SET [UpdateId]=(SELECT MAX(UpdateId) FROM INSERTED)
+	DELETE FROM [Fireflies].[Update] WHERE [AddedAt] < DATEADD(SECOND, -15, GETUTCDATE())
 END'
 	EXEC sp_executesql @Sql
 	ALTER TABLE [Fireflies].[Update] ENABLE TRIGGER [Fireflies_Update_Trigger]
