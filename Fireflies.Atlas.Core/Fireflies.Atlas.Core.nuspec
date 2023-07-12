@@ -13,6 +13,6 @@
 	<dependencies>
 		<dependency id="Fireflies.Logging.Abstractions" version="1.0.0" />
 		<dependency id="Fireflies.Atlas.Annotations" version="$version$" />
-		<dependency id="FastExpressionCompiler" version="3.3.3" />
+		<dependency id="FastExpressionCompiler" version="3.3.4" />
 	</dependencies>
 </package>
