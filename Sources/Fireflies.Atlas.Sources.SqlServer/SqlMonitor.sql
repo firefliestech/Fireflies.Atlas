@@ -10,13 +10,11 @@ IF NOT EXISTS(SELECT * FROM sys.objects WHERE object_id=OBJECT_ID('[Fireflies].[
 	SET @Sql='
 	CREATE PROCEDURE [Fireflies].[ProcessQueue]	AS
 	DECLARE	@conversation uniqueidentifier,	@senderMsgType nvarchar(100), @msg xml;
-
-	WAITFOR (
 		RECEIVE TOP(1)
 			@conversation=conversation_handle,
 			@msg=message_body,
 			@senderMsgType=message_type_name
-		FROM Fireflies.UpdateQueue);
+		FROM Fireflies.UpdateQueue;
 
 		IF (@senderMsgType = ''FirefliesUpdate'')
 			INSERT INTO [Fireflies].[Update] ([Schema], [Table], [Data]) VALUES (@msg.value(''(root/schema)[1]'', ''nvarchar(50)''), @msg.value(''(root/table)[1]'', ''nvarchar(50)''), CONVERT(NVARCHAR(MAX), @msg));
@@ -81,27 +79,24 @@ BEGIN
 	
 				DECLARE @retvalOUT NVARCHAR(MAX)
 				DECLARE @message NVARCHAR(MAX)
-				DECLARE @haveData bit
 
-				SET @haveData=0
+				SET @message = N''''<root><schema>['' + @Schema + '']</schema><table>['' + @Table + '']</table>''''
+
 				SET @retvalOUT = (SELECT * FROM INSERTED FOR XML PATH(''''row''''), ROOT (''''inserted''''))
 				IF (@retvalOUT IS NOT NULL) BEGIN
-					SET @haveData = 1
-					SET @message = @retvalOUT
+					SET @message = @message + @retvalOUT
 				END
 
 				SET @retvalOUT = (SELECT * FROM DELETED FOR XML PATH(''''row''''), ROOT (''''deleted''''))
 				IF (@retvalOUT IS NOT NULL) BEGIN
-					SET @haveData = 1
 					SET @message = @message + @retvalOUT
 				END 
 
-				IF @haveData = 1 BEGIN
-					SET @message = N''''<root><schema>'' + @Schema + ''</schema><table>'' + @Table + ''</table>'''' + @message + N''''</root>''''
-					DECLARE @Handle UNIQUEIDENTIFIER;
-					BEGIN DIALOG @Handle FROM SERVICE FirefliesUpdateService TO SERVICE ''''FirefliesUpdateService'''' ON CONTRACT [FirefliesContract] WITH ENCRYPTION = OFF;
-					SEND ON CONVERSATION @Handle MESSAGE TYPE FirefliesUpdate(@message);
-				END
+				SET @message = @message + N''''</root>''''
+
+				DECLARE @Handle UNIQUEIDENTIFIER;
+				BEGIN DIALOG @Handle FROM SERVICE FirefliesUpdateService TO SERVICE ''''FirefliesUpdateService'''' ON CONTRACT [FirefliesContract] WITH ENCRYPTION = OFF;
+				SEND ON CONVERSATION @Handle MESSAGE TYPE FirefliesUpdate(@message);
 			END''
 			EXEC sp_executesql @Sql
 
