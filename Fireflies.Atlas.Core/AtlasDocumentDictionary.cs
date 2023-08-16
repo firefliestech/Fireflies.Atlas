@@ -178,13 +178,15 @@ public class AtlasDocumentDictionary<TDocument> : AtlasDocumentDictionary, IDocu
 
     private async Task<TDocument[]> LoadDocumentsFromSource(Expression<Func<TDocument, bool>>? predicate, ExecutionFlags flags) {
         _logger.Trace(() => $"Getting documents from source. Predicate: {predicate}");
-        var (cache, documents) = await Source.GetDocuments(predicate, flags).ConfigureAwait(false);
+        var documents = await Source.GetDocuments(predicate, flags).ConfigureAwait(false);
 
         var result = new List<TDocument>();
         foreach(var document in documents.ToArray()) {
-            result.Add(document);
-            if(cache) {
-                UpdateDocument(document);
+            result.Add(document.Document);
+            if(document.Cache) {
+                UpdateDocument(document.Document);
+            } else {
+                DeleteDocument(document.Document);
             }
         }
 
@@ -212,7 +214,7 @@ public class AtlasDocumentDictionary<TDocument> : AtlasDocumentDictionary, IDocu
         Source.Dispose();
     }
 
-    public async Task TriggerUpdate<TDocument>(Expression<Func<TDocument, bool>> predicate) where TDocument : new() {
+    public async Task TriggerUpdate(Expression<Func<TDocument, bool>> predicate) {
         foreach(var affectedDocument in await InternalGetDocuments(predicate, new QueryContext(), true, ExecutionFlags.None).ConfigureAwait(false))
             Updated?.Invoke(affectedDocument, affectedDocument);
     }

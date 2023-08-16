@@ -24,28 +24,28 @@ public class RedisSource {
         }
     }
 
-    public async Task<(bool Cache, IEnumerable<TDocument> Documents)> GetDocuments<TDocument>(Expression<Func<TDocument, bool>>? predicate, HashDescriptor hashDescriptor) where TDocument : new() {
+    public async Task<IEnumerable<(bool Cache, TDocument Document)>> GetDocuments<TDocument>(Expression<Func<TDocument, bool>>? predicate, HashDescriptor hashDescriptor) where TDocument : new() {
         var documents = await InternalGetDocuments(predicate, hashDescriptor).ConfigureAwait(false);
-        return (false, documents);
+        return documents;
     }
 
-    private async Task<IEnumerable<TDocument>> InternalGetDocuments<TDocument>(Expression<Func<TDocument, bool>>? predicate, HashDescriptor hashDescriptor) where TDocument : new() {
+    private async Task<(bool Cache, TDocument Document)[]> InternalGetDocuments<TDocument>(Expression<Func<TDocument, bool>>? predicate, HashDescriptor hashDescriptor) where TDocument : new() {
         var key = GetKey(typeof(TDocument));
 
         var queryDocument = PredicateToDocument.CreateDocument(predicate);
         var keyValue = key.GetMethod!.Invoke(queryDocument, Array.Empty<object>())?.ToString();
         if(keyValue == null)
-            return Array.Empty<TDocument>();
+            return Array.Empty<(bool, TDocument)>();
 
         var db = _redis.GetDatabase(hashDescriptor.Database);
         var redisValue = await db.HashGetAsync(hashDescriptor.Key, new RedisValue(keyValue)).ConfigureAwait(false);
         if(redisValue.HasValue) {
             var document = JsonSerializer.Deserialize<TDocument>(redisValue!, _serializerOptions)!;
             key.SetValue(document, Convert.ChangeType(keyValue, key.PropertyType));
-            return new[] { document }.AsEnumerable();
+            return new[] { (false, document) };
         }
 
-        return Array.Empty<TDocument>();
+        return Array.Empty<(bool, TDocument)>();
     }
 
     private PropertyInfo GetKey(Type type) {

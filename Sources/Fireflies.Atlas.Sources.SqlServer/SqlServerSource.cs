@@ -20,9 +20,9 @@ public class SqlServerSource : IDisposable {
         _updateFetcher = new SqlMonitor(_connectionString, atlas);
     }
 
-    public async Task<(bool Cache, IEnumerable<TDocument> Documents)> GetDocuments<TDocument>(Expression<Func<TDocument, bool>>? predicate, TableDescriptor tableDescriptor, Expression<Func<TDocument, bool>>? filter, ExecutionFlags flags) where TDocument : new() {
+    public async Task<IEnumerable<TDocument>> GetDocuments<TDocument>(Expression<Func<TDocument, bool>>? predicate, TableDescriptor tableDescriptor, Expression<Func<TDocument, bool>>? filter, ExecutionFlags flags) where TDocument : new() {
         var documents = await InternalGetDocuments(predicate, tableDescriptor, filter, flags).ConfigureAwait(false);
-        return (!flags.HasFlag(ExecutionFlags.DontCache), documents);
+        return documents;
     }
 
     private async Task<IEnumerable<TDocument>> InternalGetDocuments<TDocument>(Expression<Func<TDocument, bool>>? predicate, TableDescriptor tableDescriptor, Expression<Func<TDocument, bool>>? filter, ExecutionFlags flags) where TDocument : new() {
