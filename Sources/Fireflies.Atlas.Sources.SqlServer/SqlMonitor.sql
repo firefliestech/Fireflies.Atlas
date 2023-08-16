@@ -16,10 +16,12 @@ IF NOT EXISTS(SELECT * FROM sys.objects WHERE object_id=OBJECT_ID('[Fireflies].[
 			@senderMsgType=message_type_name
 		FROM Fireflies.UpdateQueue;
 
-		IF (@senderMsgType = ''FirefliesUpdate'')
+		IF (@senderMsgType = ''FirefliesUpdate'') BEGIN
+			DELETE FROM [Fireflies].[Update] WHERE [AddedAt] < DATEADD(SECOND, -15, GETUTCDATE())
 			INSERT INTO [Fireflies].[Update] ([Schema], [Table], [Data]) VALUES (@msg.value(''(root/schema)[1]'', ''nvarchar(50)''), @msg.value(''(root/table)[1]'', ''nvarchar(50)''), CONVERT(NVARCHAR(MAX), @msg));
-
-	END CONVERSATION @conversation;
+			UPDATE [Fireflies].[UpdateMax] SET [UpdateId]=SCOPE_IDENTITY()
+			END CONVERSATION @conversation;
+		END
 	'
 	EXEC sp_executesql @Sql
 END
@@ -175,16 +177,5 @@ IF NOT EXISTS (SELECT * FROM sysobjects WHERE id=OBJECT_ID(N'[Fireflies].[Update
 	ALTER TABLE [Fireflies].[Update] ADD  CONSTRAINT [DF_Update_AddedAt]  DEFAULT (getutcdate()) FOR [AddedAt]
 END
 
-IF NOT EXISTS (SELECT * FROM sys.triggers WHERE object_id = OBJECT_ID(N'[Fireflies].[Fireflies_Update_Trigger]')) BEGIN
-	SET @Sql='
-CREATE TRIGGER [Fireflies].[Fireflies_Update_Trigger] ON [Fireflies].[Update] AFTER INSERT AS 
-BEGIN
-	SET NOCOUNT ON;
-	
-	UPDATE [Fireflies].[UpdateMax] SET [UpdateId]=(SELECT MAX(UpdateId) FROM INSERTED)
-	DELETE FROM [Fireflies].[Update] WHERE [AddedAt] < DATEADD(SECOND, -15, GETUTCDATE())
-END'
-	EXEC sp_executesql @Sql
-	ALTER TABLE [Fireflies].[Update] ENABLE TRIGGER [Fireflies_Update_Trigger]
-END
-
+/* Remove old update trigger, job is now done by [Fireflies].[ProcessQueue] stored procedure */
+DROP TRIGGER IF EXISTS [Fireflies].[Fireflies_Update_Trigger]

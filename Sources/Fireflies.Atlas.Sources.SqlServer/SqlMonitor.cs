@@ -45,7 +45,7 @@ public class SqlMonitor : IDisposable {
             if(_dependencyConnection!.State != ConnectionState.Open)
                 _dependencyConnection.Open();
 
-            await using var command = new SqlCommand("SELECT [UpdateId] FROM [Fireflies].[UpdateMax]", _dependencyConnection);
+            await using var command = new SqlCommand("SELECT [UpdateId] FROM [Fireflies].[UpdateMax] WITH (NOLOCK)", _dependencyConnection);
             _dependency = new SqlDependency(command);
             _dependency.OnChange += OnDependencyChange;
 
@@ -82,7 +82,7 @@ public class SqlMonitor : IDisposable {
 
             using var connection = new SqlConnection(_connectionString);
             connection.Open();
-            using var command = new SqlCommand($"SELECT [UpdateId], [Schema], [Table], [Data] FROM [Fireflies].[Update] WHERE [UpdateId] > {_lastReadUpdate}", connection);
+            using var command = new SqlCommand($"SELECT [UpdateId], [Schema], [Table], [Data] FROM [Fireflies].[Update] WITH (NOLOCK) WHERE [UpdateId] > {_lastReadUpdate}", connection);
             using var sqlDataReader = command.ExecuteReader();
             while(sqlDataReader.Read()) {
                 var updateId = (int)sqlDataReader[0];
