@@ -9,7 +9,8 @@ END
 IF NOT EXISTS(SELECT * FROM sys.objects WHERE object_id=OBJECT_ID('[Fireflies].[ProcessQueue]')) BEGIN
 	SET @Sql='
 	CREATE PROCEDURE [Fireflies].[ProcessQueue]	AS
-	DECLARE	@conversation uniqueidentifier,	@senderMsgType nvarchar(100), @msg xml;
+		DECLARE	@conversation uniqueidentifier,	@senderMsgType nvarchar(100), @msg xml;
+
 		RECEIVE TOP(1)
 			@conversation=conversation_handle,
 			@msg=message_body,
@@ -19,8 +20,9 @@ IF NOT EXISTS(SELECT * FROM sys.objects WHERE object_id=OBJECT_ID('[Fireflies].[
 		IF (@senderMsgType = ''FirefliesUpdate'') BEGIN
 			DELETE FROM [Fireflies].[Update] WHERE [AddedAt] < DATEADD(SECOND, -15, GETUTCDATE())
 			INSERT INTO [Fireflies].[Update] ([Schema], [Table], [Data]) VALUES (@msg.value(''(root/schema)[1]'', ''nvarchar(50)''), @msg.value(''(root/table)[1]'', ''nvarchar(50)''), CONVERT(NVARCHAR(MAX), @msg));
-			UPDATE [Fireflies].[UpdateMax] SET [UpdateId]=SCOPE_IDENTITY()
-			END CONVERSATION @conversation;
+			UPDATE [Fireflies].[UpdateMax] SET [UpdateId]=SCOPE_IDENTITY() WHERE [UpdateId] < SCOPE_IDENTITY()
+		END ELSE IF (@senderMsgType = ''http://schemas.microsoft.com/SQL/ServiceBroker/EndDialog'') BEGIN
+			END CONVERSATION @conversation WITH CLEANUP;
 		END
 	'
 	EXEC sp_executesql @Sql
@@ -99,6 +101,7 @@ BEGIN
 				DECLARE @Handle UNIQUEIDENTIFIER;
 				BEGIN DIALOG @Handle FROM SERVICE FirefliesUpdateService TO SERVICE ''''FirefliesUpdateService'''' ON CONTRACT [FirefliesContract] WITH ENCRYPTION = OFF;
 				SEND ON CONVERSATION @Handle MESSAGE TYPE FirefliesUpdate(@message);
+				END CONVERSATION @Handle
 			END''
 			EXEC sp_executesql @Sql
 
@@ -176,6 +179,3 @@ IF NOT EXISTS (SELECT * FROM sysobjects WHERE id=OBJECT_ID(N'[Fireflies].[Update
 	CREATE TABLE [Fireflies].[Update] ([UpdateId] [int] IDENTITY(1,1) NOT NULL, [AddedAt] [datetimeoffset](0) NOT NULL, [Schema] [nvarchar](50) NOT NULL, [Table] [nvarchar](50) NOT NULL, [Data] [nvarchar](max) NOT NULL, CONSTRAINT [PK_Fireflies_Update] PRIMARY KEY CLUSTERED ([UpdateId] ASC)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]) ON [PRIMARY] TEXTIMAGE_ON [PRIMARY]
 	ALTER TABLE [Fireflies].[Update] ADD  CONSTRAINT [DF_Update_AddedAt]  DEFAULT (getutcdate()) FOR [AddedAt]
 END
-
-/* Remove old update trigger, job is now done by [Fireflies].[ProcessQueue] stored procedure */
-DROP TRIGGER IF EXISTS [Fireflies].[Fireflies_Update_Trigger]
