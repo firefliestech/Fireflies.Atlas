@@ -3,19 +3,19 @@ using Fireflies.Atlas.Core;
 
 namespace Fireflies.Atlas.Source.Redis;
 
-public class RedisHashSource<TDocument> : AtlasSource<TDocument> where TDocument : new() {
+public class RedisKeySource<TDocument> : AtlasSource<TDocument> where TDocument : new() {
     private readonly RedisSource _source;
-    private readonly HashDescriptor _hashDescriptor;
+    private readonly KeyDescriptor _keyDescriptor;
 
-    public RedisHashSource(RedisSource source, HashDescriptor hashDescriptor) {
+    public RedisKeySource(RedisSource source, KeyDescriptor keyDescriptor) {
         _source = source;
-        _hashDescriptor = hashDescriptor;
+        _keyDescriptor = keyDescriptor;
     }
 
     public override Task<IEnumerable<(bool Cache, TDocument Document)>> GetDocuments(Expression<Func<TDocument, bool>>? predicate, ExecutionFlags flags) {
-        return _source.GetHashDocuments(predicate, _hashDescriptor);
+        return _source.GetKeyDocuments(predicate, _keyDescriptor);
     }
-    
+
     public override void Dispose() {
         
     }

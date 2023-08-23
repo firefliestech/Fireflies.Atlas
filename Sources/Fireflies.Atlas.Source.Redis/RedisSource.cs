@@ -24,16 +24,9 @@ public class RedisSource {
         }
     }
 
-    public async Task<IEnumerable<(bool Cache, TDocument Document)>> GetDocuments<TDocument>(Expression<Func<TDocument, bool>>? predicate, HashDescriptor hashDescriptor) where TDocument : new() {
-        var documents = await InternalGetDocuments(predicate, hashDescriptor).ConfigureAwait(false);
-        return documents;
-    }
-
-    private async Task<(bool Cache, TDocument Document)[]> InternalGetDocuments<TDocument>(Expression<Func<TDocument, bool>>? predicate, HashDescriptor hashDescriptor) where TDocument : new() {
-        var key = GetKey(typeof(TDocument));
-
+    public async Task<IEnumerable<(bool Cache, TDocument Document)>> GetHashDocuments<TDocument>(Expression<Func<TDocument, bool>>? predicate, HashDescriptor hashDescriptor) where TDocument : new() {
         var queryDocument = PredicateToDocument.CreateDocument(predicate);
-        var keyValue = key.GetMethod!.Invoke(queryDocument, Array.Empty<object>())?.ToString();
+        var keyValue = hashDescriptor.KeyProperty.GetMethod!.Invoke(queryDocument, Array.Empty<object>())?.ToString();
         if(keyValue == null)
             return Array.Empty<(bool, TDocument)>();
 
@@ -41,21 +34,32 @@ public class RedisSource {
         var redisValue = await db.HashGetAsync(hashDescriptor.Key, new RedisValue(keyValue)).ConfigureAwait(false);
         if(redisValue.HasValue) {
             var document = JsonSerializer.Deserialize<TDocument>(redisValue!, _serializerOptions)!;
-            key.SetValue(document, Convert.ChangeType(keyValue, key.PropertyType));
+            hashDescriptor.KeyProperty.SetValue(document, Convert.ChangeType(keyValue, hashDescriptor.KeyProperty.PropertyType));
             return new[] { (false, document) };
         }
 
         return Array.Empty<(bool, TDocument)>();
     }
 
-    private PropertyInfo GetKey(Type type) {
-        var key = _propertyCache.GetOrAdd(type, _ => {
-            var keys = TypeHelpers.GetAtlasKeyProperties(type);
-            if(keys.Count() != 1)
-                throw new ArgumentException("Only one AtlasKey is allowed for redis documents");
+    public async Task<IEnumerable<(bool Cache, TDocument Document)>> GetKeyDocuments<TDocument>(Expression<Func<TDocument, bool>> predicate, KeyDescriptor keyDescriptor) where TDocument : new() {
+        var queryDocument = PredicateToDocument.CreateDocument(predicate);
+        var keyValue = keyDescriptor.KeyProperty.GetMethod!.Invoke(queryDocument, Array.Empty<object>())?.ToString();
+        if(keyValue == null)
+            return Array.Empty<(bool, TDocument)>();
 
-            return keys.First().Property;
-        });
-        return key;
+        var db = _redis.GetDatabase(keyDescriptor.Database);
+        var redisValue = await db.StringGetAsync(keyDescriptor.KeyBuilder(keyValue)).ConfigureAwait(false);
+        if(redisValue.HasValue) {
+            var document = Activator.CreateInstance<TDocument>();
+            
+            keyDescriptor.KeyProperty.SetValue(document, Convert.ChangeType(keyValue, keyDescriptor.KeyProperty.PropertyType));
+
+            var value = JsonSerializer.Deserialize(redisValue!, keyDescriptor.ValueProperty.PropertyType, _serializerOptions)!;
+            keyDescriptor.ValueProperty.SetValue(document, value);
+            
+            return new[] { (false, document) };
+        }
+
+        return Array.Empty<(bool, TDocument)>();
     }
 }
