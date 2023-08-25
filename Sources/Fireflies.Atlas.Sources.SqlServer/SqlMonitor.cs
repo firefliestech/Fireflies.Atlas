@@ -45,7 +45,7 @@ public class SqlMonitor : IDisposable {
             if(_dependencyConnection!.State != ConnectionState.Open)
                 _dependencyConnection.Open();
 
-            await using var command = new SqlCommand("SELECT [UpdateId] FROM [Fireflies].[UpdateMax] WITH (NOLOCK)", _dependencyConnection);
+            await using var command = new SqlCommand("SELECT [UpdateId] FROM [Fireflies].[UpdateMax]", _dependencyConnection);
             _dependency = new SqlDependency(command);
             _dependency.OnChange += OnDependencyChange;
 
