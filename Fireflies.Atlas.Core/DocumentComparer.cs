@@ -3,11 +3,11 @@
 namespace Fireflies.Atlas.Core;
 
 public static class DocumentComparer {
-    public static bool Equals<TDocument>(TDocument first, TDocument second) {
+    public static bool Equals<TDocument>(TDocument first, TDocument second, bool ignoreType = false) {
         if(ReferenceEquals(null, second)) return false;
         if(ReferenceEquals(null, first)) return false;
         if(ReferenceEquals(first, second)) return true;
-        if(first.GetType() != second.GetType()) return false;
+        if(!ignoreType && first.GetType() != second.GetType()) return false;
 
         // Calculate
         foreach(var property in TypeHelpers.GetAtlasProperties(typeof(TDocument))) {

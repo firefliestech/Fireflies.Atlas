@@ -35,6 +35,10 @@ public static class TypeHelpers {
         return type.GetCustomAttributes(true).OfType<TSource>().FirstOrDefault();
     }
 
+    public static IEnumerable<(PropertyInfo Property, AtlasKeyAttribute Attributes)> GetAtlasKeyProperties<T>() {
+        return GetAtlasKeyProperties(typeof(T));
+    }
+
     public static IEnumerable<(PropertyInfo Property, AtlasKeyAttribute Attributes)> GetAtlasKeyProperties(Type type) {
         return _cachedAtlasKeyProperties.GetOrAdd(type, _ => {
             return type.GetProperties().Select(x =>
