@@ -81,11 +81,11 @@ public class AtlasDocumentDictionary<TDocument> : AtlasDocumentDictionary, IDocu
         }
     }
 
-    public async Task<IEnumerable<TDocument>> GetDocuments(Expression predicate, QueryContext queryContext, ExecutionFlags flags) {
-        return await InternalGetDocuments(predicate, queryContext, false, flags).ConfigureAwait(false);
+    public async Task<IEnumerable<TDocument>> GetDocuments(Expression predicate, QueryContext queryContext, CacheFlag cacheFlag, ExecutionFlags flags) {
+        return await InternalGetDocuments(predicate, queryContext, cacheFlag, flags).ConfigureAwait(false);
     }
 
-    private async Task<IEnumerable<TDocument>> InternalGetDocuments(Expression predicate, QueryContext queryContext, bool noLoad, ExecutionFlags flags) {
+    private async Task<IEnumerable<TDocument>> InternalGetDocuments(Expression predicate, QueryContext queryContext, CacheFlag cacheFlag, ExecutionFlags flags) {
         var whereAggregateVisitor = new WhereAggregateVisitor();
         var normalizedExpression = whereAggregateVisitor.CreateWhereExpression(predicate);
 
@@ -99,8 +99,12 @@ public class AtlasDocumentDictionary<TDocument> : AtlasDocumentDictionary, IDocu
                 return cachedResult;
         }
 
+        if(cacheFlag == CacheFlag.Default) {
+            cacheFlag = _preloaded ? CacheFlag.OnlyCache : CacheFlag.BypassCache;
+        }
+
         TDocument[] result;
-        if(!flags.HasFlag(ExecutionFlags.BypassCache) && (_preloaded || noLoad)) {
+        if(cacheFlag == CacheFlag.OnlyCache) {
             // If preloaded, all documents should already be in memory
             _logger.Trace(() => $"Documents were preloaded. Searching in cache. Predicate: {normalizedExpression}");
 
@@ -215,7 +219,7 @@ public class AtlasDocumentDictionary<TDocument> : AtlasDocumentDictionary, IDocu
     }
 
     public async Task TriggerUpdate(Expression<Func<TDocument, bool>> predicate) {
-        foreach(var affectedDocument in await InternalGetDocuments(predicate, new QueryContext(), true, ExecutionFlags.None).ConfigureAwait(false))
+        foreach(var affectedDocument in await InternalGetDocuments(predicate, new QueryContext(), CacheFlag.OnlyCache, ExecutionFlags.None).ConfigureAwait(false))
             Updated?.Invoke(affectedDocument, affectedDocument);
     }
 
@@ -303,7 +307,7 @@ public class AtlasDocumentDictionary<TDocument> : AtlasDocumentDictionary, IDocu
 
             var left = Visit(node.Left);
             var leftIsNullableType = Nullable.GetUnderlyingType(left.Type) != null;
-            
+
             var right = Visit(node.Right);
             var rightIsNullableType = Nullable.GetUnderlyingType(right.Type) != null;
 

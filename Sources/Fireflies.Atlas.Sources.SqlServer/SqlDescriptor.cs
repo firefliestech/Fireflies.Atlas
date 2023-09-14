@@ -1,6 +1,6 @@
 ﻿namespace Fireflies.Atlas.Sources.SqlServer;
 
-public class TableDescriptor {
+public class SqlDescriptor {
     private string _schema = null!;
     private string _table = null!;
 
@@ -24,12 +24,28 @@ public class TableDescriptor {
         }
     }
 
-    public TableDescriptor(string schema, string table) {
+    public SqlDescriptor(string schema, string table) {
         Schema = schema;
         Table = table;
     }
 
-    protected bool Equals(TableDescriptor other) {
+    public SqlDescriptor(string descriptor) {
+        var parts = descriptor.Split(".");
+        switch(parts.Length) {
+            case 1:
+                Schema = "dbo";
+                Table = parts[0];
+                break;
+            case 2:
+                Schema = parts[0];
+                Table = parts[1];
+                break;
+            default:
+                throw new ArgumentException($"{nameof(descriptor)} needs to be name or schema.name");
+        }
+    }
+
+    protected bool Equals(SqlDescriptor other) {
         return _schema.ToUpper() == other._schema.ToUpper() && _table.ToUpper() == other._table.ToUpper();
     }
 
@@ -38,7 +54,7 @@ public class TableDescriptor {
         if(ReferenceEquals(this, obj)) return true;
         if(obj.GetType() != this.GetType()) return false;
 
-        return Equals((TableDescriptor)obj);
+        return Equals((SqlDescriptor)obj);
     }
 
     public override int GetHashCode() {
@@ -48,4 +64,6 @@ public class TableDescriptor {
     public override string ToString() {
         return $"{Schema}.{Table}";
     }
+
+    public static implicit operator SqlDescriptor(string descriptor) => new(descriptor);
 }

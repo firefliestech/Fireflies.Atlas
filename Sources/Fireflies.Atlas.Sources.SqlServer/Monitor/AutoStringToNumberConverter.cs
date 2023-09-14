@@ -1,6 +1,6 @@
 ﻿using System.Text.Json;
 
-namespace Fireflies.Atlas.Sources.SqlServer;
+namespace Fireflies.Atlas.Sources.SqlServer.Monitor;
 
 public class AutoStringToNumberConverter : System.Text.Json.Serialization.JsonConverter<object> {
     public override bool CanConvert(Type typeToConvert) {

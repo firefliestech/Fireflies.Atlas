@@ -3,6 +3,5 @@
 [Flags]
 public enum ExecutionFlags {
     None,
-    BypassCache,
     BypassFilter
 }

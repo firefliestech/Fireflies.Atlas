@@ -23,39 +23,39 @@ public class Atlas : IDisposable {
         }
     }
 
-    public Task<TDocument?> GetDocument<TDocument>(Expression<Func<TDocument, bool>> predicate, ExecutionFlags flags = ExecutionFlags.None) where TDocument : new() {
-        return GetDocument<TDocument>(predicate, new QueryContext(), flags);
+    public Task<TDocument?> GetDocument<TDocument>(Expression<Func<TDocument, bool>> predicate, CacheFlag cacheFlag = CacheFlag.Default, ExecutionFlags flags = ExecutionFlags.None) where TDocument : new() {
+        return GetDocument<TDocument>(predicate, new QueryContext(), cacheFlag, flags);
     }
 
-    public Task<TDocument?> GetDocument<TDocument>(Expression predicate, ExecutionFlags flags = ExecutionFlags.None) where TDocument : new() {
-        return GetDocument<TDocument>(predicate, new QueryContext(), flags);
+    public Task<TDocument?> GetDocument<TDocument>(Expression predicate, CacheFlag cacheFlag = CacheFlag.Default, ExecutionFlags flags = ExecutionFlags.None) where TDocument : new() {
+        return GetDocument<TDocument>(predicate, new QueryContext(), cacheFlag, flags);
     }
 
-    public Task<IEnumerable<TDocument>> GetDocuments<TDocument>(ExecutionFlags flags = ExecutionFlags.None) where TDocument : new() {
-        return GetDocuments<TDocument>(x => true, flags);
+    public Task<IEnumerable<TDocument>> GetDocuments<TDocument>(CacheFlag cacheFlag = CacheFlag.Default, ExecutionFlags flags = ExecutionFlags.None) where TDocument : new() {
+        return GetDocuments<TDocument>(x => true, cacheFlag, flags);
     }
 
-    public Task<IEnumerable<TDocument>> GetDocuments<TDocument>(Expression<Func<TDocument, bool>> predicate, ExecutionFlags flags = ExecutionFlags.None) where TDocument : new() {
-        return GetDocuments<TDocument>((Expression)predicate, flags);
+    public Task<IEnumerable<TDocument>> GetDocuments<TDocument>(Expression<Func<TDocument, bool>> predicate, CacheFlag cacheFlag = CacheFlag.Default, ExecutionFlags flags = ExecutionFlags.None) where TDocument : new() {
+        return GetDocuments<TDocument>((Expression)predicate, cacheFlag, flags);
     }
 
-    public async Task<IEnumerable<TDocument>> GetDocuments<TDocument>(Expression predicate, ExecutionFlags flags = ExecutionFlags.None) where TDocument : new() {
+    public async Task<IEnumerable<TDocument>> GetDocuments<TDocument>(Expression predicate, CacheFlag cacheFlag = CacheFlag.Default, ExecutionFlags flags = ExecutionFlags.None) where TDocument : new() {
         var startedAt = DateTimeOffset.UtcNow;
 
-        var result = await GetDocuments<TDocument>(predicate, new QueryContext(), flags).ConfigureAwait(false);
+        var result = await GetDocuments<TDocument>(predicate, new QueryContext(), cacheFlag, flags).ConfigureAwait(false);
         _logger.Trace(() => $"Got {result.Count()} documents in {(DateTimeOffset.UtcNow - startedAt).TotalMilliseconds}ms. Predicate: {predicate}");
 
         return result;
     }
 
-    internal async Task<TDocument?> GetDocument<TDocument>(Expression predicate, QueryContext queryContext, ExecutionFlags flags = ExecutionFlags.None) where TDocument : new() {
-        var result = await GetDocuments<TDocument>(predicate, queryContext, flags).ConfigureAwait(false);
+    internal async Task<TDocument?> GetDocument<TDocument>(Expression predicate, QueryContext queryContext, CacheFlag cacheFlag = CacheFlag.Default, ExecutionFlags flags = ExecutionFlags.None) where TDocument : new() {
+        var result = await GetDocuments<TDocument>(predicate, queryContext, cacheFlag, flags).ConfigureAwait(false);
         return result.FirstOrDefault();
     }
 
-    internal Task<IEnumerable<TDocument>> GetDocuments<TDocument>(Expression predicate, QueryContext queryContext, ExecutionFlags flags = ExecutionFlags.None) where TDocument : new() {
+    internal Task<IEnumerable<TDocument>> GetDocuments<TDocument>(Expression predicate, QueryContext queryContext, CacheFlag cacheFlag = CacheFlag.Default, ExecutionFlags flags = ExecutionFlags.None) where TDocument : new() {
         var dictionary = InternalGetDictionary<TDocument>();
-        var result = dictionary == null ? Task.FromResult(Enumerable.Empty<TDocument>()) : dictionary.GetDocuments(predicate, queryContext, flags);
+        var result = dictionary == null ? Task.FromResult(Enumerable.Empty<TDocument>()) : dictionary.GetDocuments(predicate, queryContext, cacheFlag, flags);
         return result;
     }
 

@@ -14,10 +14,10 @@ public class LambdaToSqlTranslator<T> : ExpressionVisitor, IDisposable {
     private static readonly MethodInfo? StringEndWithMethodInfo = typeof(string).GetMethod(nameof(string.EndsWith), new[] { typeof(string) });
     private static readonly MethodInfo? StringEndsWithWithStringComparisonMethodInfo = typeof(string).GetMethod(nameof(string.StartsWith), new[] { typeof(string), typeof(StringComparison) });
 
-    public string Translate(TableDescriptor tableDescriptor, Expression? expression, Expression? filter) {
+    public string Translate(SqlDescriptor sqlDescriptor, Expression? expression, Expression? filter) {
         AddSelect();
         AddColumns();
-        AddFrom(tableDescriptor);
+        AddFrom(sqlDescriptor);
 
         if(expression != null) {
             AddWhere(expression);
@@ -44,8 +44,8 @@ public class LambdaToSqlTranslator<T> : ExpressionVisitor, IDisposable {
         _sqlAccumulator.Append($" {string.Join(", ", columns)}");
     }
 
-    private void AddFrom(TableDescriptor tableDescriptor) {
-        _sqlAccumulator.Append($" FROM {tableDescriptor.Schema}.{tableDescriptor.Table}");
+    private void AddFrom(SqlDescriptor sqlDescriptor) {
+        _sqlAccumulator.Append($" FROM {sqlDescriptor.Schema}.{sqlDescriptor.Table}");
     }
 
     private void AddWhere(Expression expression) {

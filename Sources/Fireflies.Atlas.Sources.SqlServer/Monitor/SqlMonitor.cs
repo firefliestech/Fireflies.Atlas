@@ -1,27 +1,24 @@
-﻿using System.Data;
-using System.Linq.Expressions;
+﻿using System.Collections.Concurrent;
+using System.Data;
 using System.Reflection;
-using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Xml.Linq;
-using FastExpressionCompiler;
 using Fireflies.Logging.Abstractions;
 using Microsoft.Data.SqlClient;
 using Newtonsoft.Json;
 using JsonSerializer = System.Text.Json.JsonSerializer;
 
-namespace Fireflies.Atlas.Sources.SqlServer;
+namespace Fireflies.Atlas.Sources.SqlServer.Monitor;
 
 public class SqlMonitor : IDisposable {
     private readonly string _connectionString;
     private readonly Core.Atlas _atlas;
-    private readonly Dictionary<TableDescriptor, Action<JsonObject>> _monitors = new();
+    private readonly ConcurrentDictionary<SqlDescriptor, TableNotification> _monitors = new();
     private static bool _initialized;
     private readonly Guid _uuid = Guid.NewGuid();
     private readonly Timer _timer;
     private SqlConnection? _dependencyConnection;
     private SqlDependency? _dependency;
-    private readonly JsonSerializerOptions _serializerOptions;
     private readonly IFirefliesLogger _logger;
     private readonly SemaphoreSlim _semaphore = new(1);
 
@@ -32,7 +29,6 @@ public class SqlMonitor : IDisposable {
         _connectionString = connectionString;
         _atlas = atlas;
         _timer = new Timer(UpdateHeartbeat);
-        _serializerOptions = new JsonSerializerOptions { PropertyNameCaseInsensitive = true, Converters = { new XmlStringToEnumConverter(), new AutoStringToNumberConverter(), new XmlStringToBooleanConverter() } };
     }
 
     public void StartMonitor() {
@@ -88,14 +84,14 @@ public class SqlMonitor : IDisposable {
                 var updateId = (int)sqlDataReader[0];
                 if(_lastReadUpdate < updateId)
                     _lastReadUpdate = updateId;
-                var tableDescriptor = new TableDescriptor((string)sqlDataReader[1], (string)sqlDataReader[2]);
+                var tableDescriptor = new SqlDescriptor((string)sqlDataReader[1], (string)sqlDataReader[2]);
 
-                if(_monitors.TryGetValue(tableDescriptor, out var callback)) {
+                if(_monitors.TryGetValue(tableDescriptor, out var notificationRegistry)) {
                     var value = XDocument.Parse((string)sqlDataReader[3]);
                     var json = JsonConvert.SerializeXNode(value, Formatting.None, true);
                     var jsonDocument = JsonSerializer.Deserialize<JsonObject>(json);
                     if(jsonDocument != null)
-                        callback(jsonDocument);
+                        notificationRegistry.Process(jsonDocument);
                 }
             }
         } finally {
@@ -103,7 +99,7 @@ public class SqlMonitor : IDisposable {
         }
     }
 
-    public void MonitorTable<TDocument>(TableDescriptor tableDescriptor, Expression<Func<TDocument, bool>>? filter) where TDocument : new() {
+    public TableNotification<TDocument> MonitorTable<TDocument>(SqlDescriptor sqlDescriptor) where TDocument : new() {
         if(!_initialized) {
             _initialized = true;
 
@@ -124,39 +120,27 @@ public class SqlMonitor : IDisposable {
             _timer.Change(TimeSpan.FromSeconds(20), TimeSpan.FromSeconds(20));
         }
 
-        var monitorAdded = _monitors.TryAdd(tableDescriptor, jsonDocument => {
-            var compiledFilter = filter?.CompileFast();
-
-            var insertedRow = jsonDocument["inserted"]?["row"];
-            if(insertedRow != null) {
-                var document = insertedRow.Deserialize<TDocument>(_serializerOptions)!;
-                if(compiledFilter != null && !compiledFilter(document)) {
-                    _atlas.DeleteDocument(document);
-                } else {
-                    _atlas.UpdateDocument(document);
-                }
-            } else {
-                var deletedRow = jsonDocument["deleted"]?["row"];
-                if(deletedRow != null) {
-                    var document = deletedRow.Deserialize<TDocument>(_serializerOptions);
-                    _atlas.DeleteDocument(document);
-                }
-            }
+        var monitorAdded = false;
+        var monitor = _monitors.GetOrAdd(sqlDescriptor, _ => {
+            monitorAdded = true;
+            return new TableNotification<TDocument>();
         });
 
         if(monitorAdded)
-            AddMonitor(tableDescriptor);
+            AddMonitor(sqlDescriptor);
+
+        return (TableNotification<TDocument>)monitor;
     }
 
-    private void AddMonitor(TableDescriptor tableDescriptor) {
+    private void AddMonitor(SqlDescriptor sqlDescriptor) {
         try {
             _logger.Trace($"Running {nameof(AddMonitor)}");
             using var connection = new SqlConnection(_connectionString);
             connection.Open();
             using var insertMonitorCommand = new SqlCommand("INSERT INTO [Fireflies].[Monitor] VALUES (@uuid, @schema, @table)", connection);
             insertMonitorCommand.Parameters.Add("@uuid", SqlDbType.UniqueIdentifier).Value = _uuid;
-            insertMonitorCommand.Parameters.Add("@schema", SqlDbType.NVarChar).Value = tableDescriptor.Schema;
-            insertMonitorCommand.Parameters.Add("@table", SqlDbType.NVarChar).Value = tableDescriptor.Table;
+            insertMonitorCommand.Parameters.Add("@schema", SqlDbType.NVarChar).Value = sqlDescriptor.Schema;
+            insertMonitorCommand.Parameters.Add("@table", SqlDbType.NVarChar).Value = sqlDescriptor.Table;
             insertMonitorCommand.ExecuteNonQuery();
         } catch(Exception ex) {
             _logger.Error(ex, $"Exception while running {nameof(AddMonitor)}");
