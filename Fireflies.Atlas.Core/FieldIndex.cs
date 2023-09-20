@@ -34,9 +34,9 @@ public class FieldIndex<TDocument, TProperty> : FieldIndex<TDocument> {
         if(!_indexedDocuments.TryGetValue(key, out var list))
             return;
 
-        var documentKey = document.CalculateKey();
+        var documentKey = DocumentHelpers.CalculateKey(document);
         for(var i = list.Count - 1; i >= 0; i--) {
-            if(list[i].CalculateKey() == documentKey)
+            if(DocumentHelpers.CalculateKey(list[i]) == documentKey)
                 list.RemoveAt(i);
         }
     }

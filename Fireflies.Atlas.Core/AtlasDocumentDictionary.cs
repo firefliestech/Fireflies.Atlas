@@ -1,6 +1,7 @@
 ﻿using System.Collections.Concurrent;
 using System.Linq.Expressions;
 using System.Reflection;
+using Fireflies.Atlas.Core.Delegate;
 using Fireflies.Atlas.Core.Helpers;
 using Fireflies.Logging.Abstractions;
 
@@ -19,9 +20,9 @@ public class AtlasDocumentDictionary<TDocument> : AtlasDocumentDictionary, IDocu
     private bool _preloaded;
     private readonly List<FieldIndex<TDocument>> _indexes = new();
 
-    public event Action<TDocument>? Loaded;
-    public event Action<TDocument, TDocument?>? Updated;
-    public event Action<TDocument>? Deleted;
+    public event DocumentLoaded<TDocument>? Loaded;
+    public event DocumentUpdated<TDocument>? Updated;
+    public event DocumentDeleted<TDocument>? Deleted;
 
     public AtlasDocumentDictionary(Atlas atlas) {
         _atlas = atlas;
@@ -43,7 +44,7 @@ public class AtlasDocumentDictionary<TDocument> : AtlasDocumentDictionary, IDocu
         var updated = false;
 
         TDocument? oldDocument = default;
-        var key = document.CalculateKey();
+        var key = DocumentHelpers.CalculateKey(document);
         _documents.AddOrUpdate(key, _ => document, (_, oldValue) => {
             updated = true;
             oldDocument = oldValue;
@@ -60,7 +61,7 @@ public class AtlasDocumentDictionary<TDocument> : AtlasDocumentDictionary, IDocu
         }
 
         if(updated) {
-            _logger.Debug(() => $"Document was updated. New: {document.AsString()}. Old: {oldDocument.AsString()}");
+            _logger.Debug(() => $"Document was updated. New: {DocumentHelpers.AsString(document)}. Old: {DocumentHelpers.AsString(oldDocument)}");
 
             Updated?.Invoke(ProxyFactory(document, new QueryContext(), Relations),
                 oldDocument != null ? ProxyFactory(oldDocument, new QueryContext(), Relations) : default);
@@ -70,9 +71,9 @@ public class AtlasDocumentDictionary<TDocument> : AtlasDocumentDictionary, IDocu
     }
 
     public void DeleteDocument(TDocument document) {
-        var key = document.CalculateKey();
+        var key = DocumentHelpers.CalculateKey(document);
         if(_documents.TryRemove(key, out _)) {
-            _logger.Debug(() => $"Document was deleted. New: {document.AsString()}");
+            _logger.Debug(() => $"Document was deleted. New: {DocumentHelpers.AsString(document)}");
 
             foreach(var index in _indexes)
                 index.Remove(document);
@@ -82,10 +83,6 @@ public class AtlasDocumentDictionary<TDocument> : AtlasDocumentDictionary, IDocu
     }
 
     public async Task<IEnumerable<TDocument>> GetDocuments(Expression predicate, QueryContext queryContext, CacheFlag cacheFlag, ExecutionFlags flags) {
-        return await InternalGetDocuments(predicate, queryContext, cacheFlag, flags).ConfigureAwait(false);
-    }
-
-    private async Task<IEnumerable<TDocument>> InternalGetDocuments(Expression predicate, QueryContext queryContext, CacheFlag cacheFlag, ExecutionFlags flags) {
         var whereAggregateVisitor = new WhereAggregateVisitor();
         var normalizedExpression = whereAggregateVisitor.CreateWhereExpression(predicate);
 
@@ -93,20 +90,19 @@ public class AtlasDocumentDictionary<TDocument> : AtlasDocumentDictionary, IDocu
             return queryContext.Get(normalizedExpression);
         }
 
-        if(normalizedExpression != null) {
+        if(normalizedExpression != null && cacheFlag != CacheFlag.BypassCache) {
             // Create document and check for key in local cache if all populated
             if(TryGetKeyedQueryFromCache(queryContext, normalizedExpression, out var cachedResult))
                 return cachedResult;
         }
 
-        if(cacheFlag == CacheFlag.Default) {
-            cacheFlag = _preloaded ? CacheFlag.OnlyCache : CacheFlag.BypassCache;
-        }
-
         TDocument[] result;
-        if(cacheFlag == CacheFlag.OnlyCache) {
+        if(cacheFlag == CacheFlag.OnlyCache || (cacheFlag == CacheFlag.Default && _preloaded)) {
             // If preloaded, all documents should already be in memory
-            _logger.Trace(() => $"Documents were preloaded. Searching in cache. Predicate: {normalizedExpression}");
+            if(_preloaded)
+                _logger.Trace(() => $"Documents were preloaded. Searching in cache. Predicate: {normalizedExpression}");
+            else
+                _logger.Trace(() => $"{nameof(CacheFlag.OnlyCache)} was specified. Searching in cache, even if not not all documents might be loaded. Predicate: {normalizedExpression}");
 
             if(normalizedExpression == null) {
                 result = _documents.Values.ToArray();
@@ -114,20 +110,31 @@ public class AtlasDocumentDictionary<TDocument> : AtlasDocumentDictionary, IDocu
                 IEnumerable<TDocument> possibleDocuments = _documents.Values;
                 if(TryLimitPossibleResultsByIndex(normalizedExpression, possibleDocuments, out var filteredDocuments)) {
                     possibleDocuments = filteredDocuments;
-                    _logger.Trace(() => $"Documents were filtered by index. Documents found: {possibleDocuments.Count()}. Predicate: {predicate}");
+                    _logger.Trace(() => $"Documents were filtered by index. Documents found: {possibleDocuments.Count()}. Predicate: {normalizedExpression}");
                 } else {
-                    _logger.Warn(() => $"Documents will be found by SCAN. Predicate: {predicate}");
+                    _logger.Warn(() => $"Documents will be found by SCAN. Predicate: {normalizedExpression}");
                 }
 
                 possibleDocuments = possibleDocuments.Where(ExpressionCompiler.Compile(normalizedExpression));
                 result = possibleDocuments.ToArray();
             }
 
-            _logger.Trace(() => $"Documents were preloaded. Searching in cache. Documents found: {result.Length}. Predicate: {normalizedExpression}");
+            if(_preloaded)
+                _logger.Trace(() => $"Documents were preloaded. Searched in cache. Documents found: {result.Length}. Predicate: {normalizedExpression}");
+            else
+                _logger.Trace(() => $"{nameof(CacheFlag.OnlyCache)} was specified. Searched in cache. Documents found: {result.Length}. Predicate: {normalizedExpression}");
         } else {
-            _logger.Trace(() => $"Documents were not preloaded. Searching in source. Predicate: {predicate}");
+            if(!_preloaded)
+                _logger.Trace(() => $"Documents were not preloaded. Searching in source. Predicate: {normalizedExpression}");
+            else
+                _logger.Trace(() => $"Documents were preloaded but {nameof(CacheFlag.BypassCache)} was specified. Searching in source. Predicate: {normalizedExpression}");
+
             result = await LoadDocumentsFromSource(normalizedExpression, flags).ConfigureAwait(false);
-            _logger.Trace(() => $"Documents were not preloaded. Searching in source. Documents found: {result.Length}. Predicate: {normalizedExpression}");
+
+            if(!_preloaded)
+                _logger.Trace(() => $"Documents were not preloaded. Searching in source. Documents found: {result.Length}. Predicate: {normalizedExpression}");
+            else
+                _logger.Trace(() => $"Documents were preloaded but {nameof(CacheFlag.BypassCache)} was specified. Searched in source. PDocuments found: {result.Length}. Predicate: {normalizedExpression}");
         }
 
         return queryContext.Add(normalizedExpression, CreateProxies(result, queryContext));
@@ -150,13 +157,13 @@ public class AtlasDocumentDictionary<TDocument> : AtlasDocumentDictionary, IDocu
 
     private bool TryGetKeyedQueryFromCache(QueryContext queryContext, Expression<Func<TDocument, bool>> normalizedExpression, out IEnumerable<TDocument> result) {
         var queryDocument = PredicateToDocument.CreateDocument(normalizedExpression);
-        var allKeysAssigned = queryDocument.IsAllKeysAssigned();
+        var allKeysAssigned = DocumentHelpers.IsAllKeysAssigned(queryDocument);
         if(!allKeysAssigned) {
             result = Enumerable.Empty<TDocument>();
             return false;
         }
 
-        var key = queryDocument.CalculateKey();
+        var key = DocumentHelpers.CalculateKey(queryDocument);
         if(_documents.TryGetValue(key, out var resultDocument)) {
             // Even if we match by key there could be additional queries not matching the keyed document, hence the Where clause
             var predicate = ExpressionCompiler.Compile(normalizedExpression);
@@ -219,7 +226,7 @@ public class AtlasDocumentDictionary<TDocument> : AtlasDocumentDictionary, IDocu
     }
 
     public async Task TriggerUpdate(Expression<Func<TDocument, bool>> predicate) {
-        foreach(var affectedDocument in await InternalGetDocuments(predicate, new QueryContext(), CacheFlag.OnlyCache, ExecutionFlags.None).ConfigureAwait(false))
+        foreach(var affectedDocument in await GetDocuments(predicate, new QueryContext(), CacheFlag.OnlyCache, ExecutionFlags.None).ConfigureAwait(false))
             Updated?.Invoke(affectedDocument, affectedDocument);
     }
 

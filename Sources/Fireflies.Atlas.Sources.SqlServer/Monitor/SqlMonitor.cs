@@ -101,18 +101,22 @@ public class SqlMonitor : IDisposable {
 
     public TableNotification<TDocument> MonitorTable<TDocument>(SqlDescriptor sqlDescriptor) where TDocument : new() {
         if(!_initialized) {
+            _logger.Debug("Initializing monitor infrastructure");
             _initialized = true;
 
+            _logger.Trace($"Starting {nameof(SqlDependency)}");
+            SqlDependency.Start(_connectionString);
+
+            _logger.Trace($"Running install script");
             using var installScriptScript = Assembly.GetExecutingAssembly().GetManifestResourceStream($"{typeof(SqlMonitor).FullName}.sql")!;
             using var streamReader = new StreamReader(installScriptScript);
             var installScript = streamReader.ReadToEnd()!;
-
-            SqlDependency.Start(_connectionString);
 
             using var connection = new SqlConnection(_connectionString);
             connection.Open();
             using var command = new SqlCommand(installScript, connection);
             command.ExecuteNonQuery();
+            _logger.Trace("Install script was executed");
 
             StartMonitor();
             AddListener();
@@ -122,12 +126,15 @@ public class SqlMonitor : IDisposable {
 
         var monitorAdded = false;
         var monitor = _monitors.GetOrAdd(sqlDescriptor, _ => {
+            _logger.Trace($"Creating monitor for {sqlDescriptor}");
             monitorAdded = true;
             return new TableNotification<TDocument>();
         });
 
-        if(monitorAdded)
+        if(monitorAdded) {
+            _logger.Debug($"Adding monitor for {sqlDescriptor}");
             AddMonitor(sqlDescriptor);
+        }
 
         return (TableNotification<TDocument>)monitor;
     }

@@ -6,10 +6,10 @@ namespace Fireflies.Atlas.Core;
 public abstract class AtlasDocumentBuilder {
     internal Type DocumentType { get; set; }
 
-    public bool Preload { get; internal set; }
     public AtlasSource Source { get; set; }
 
     internal abstract Task PreBuild(Atlas atlas);
+    internal abstract Task Preload(Atlas atlas);
     internal abstract Task PostBuild(Atlas atlas);
 }
 
@@ -18,7 +18,11 @@ public class AtlasDocumentBuilder<TDocument> : AtlasDocumentBuilder where TDocum
     private readonly WrapperGenerator _wrapperGenerator;
     private readonly AtlasDocumentDictionary<TDocument> _dictionary;
     private readonly List<AtlasRelation<TDocument>> _relations = new();
-    
+    private bool _preload;
+
+    private Func<Atlas, AtlasDocumentDictionary<TDocument>, Task>? _beforePreload;
+    private Func<Atlas, AtlasDocumentDictionary<TDocument>, Task>? _afterPreload;
+
     internal AtlasDocumentBuilder(Atlas atlas, WrapperGenerator wrapperGenerator) {
         _atlas = atlas;
         _wrapperGenerator = wrapperGenerator;
@@ -37,7 +41,17 @@ public class AtlasDocumentBuilder<TDocument> : AtlasDocumentBuilder where TDocum
     }
 
     public AtlasDocumentBuilder<TDocument> PreloadDocuments() {
-        Preload = true;
+        _preload = true;
+        return this;
+    }
+
+    public AtlasDocumentBuilder<TDocument> BeforePreload(Func<Atlas, AtlasDocumentDictionary<TDocument>, Task>? callback) {
+        _beforePreload = callback;
+        return this;
+    }
+
+    public AtlasDocumentBuilder<TDocument> AfterPreload(Func<Atlas, AtlasDocumentDictionary<TDocument>, Task>? callback) {
+        _afterPreload = callback;
         return this;
     }
 
@@ -48,7 +62,20 @@ public class AtlasDocumentBuilder<TDocument> : AtlasDocumentBuilder where TDocum
         _dictionary.Relations = relations;
         _dictionary.ProxyFactory = wrapperType;
 
-        return Preload ? _dictionary.Preload() : Task.CompletedTask;
+        return Task.CompletedTask;
+    }
+
+    internal override async Task Preload(Atlas atlas) {
+        if(!_preload)
+            return;
+
+        if(_beforePreload != null)
+            await _beforePreload(_atlas, _dictionary).ConfigureAwait(false);
+
+        await _dictionary.Preload().ConfigureAwait(false);
+
+        if(_afterPreload != null)
+            await _afterPreload(_atlas, _dictionary).ConfigureAwait(false);
     }
 
     internal override Task PostBuild(Atlas atlas) {

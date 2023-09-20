@@ -44,9 +44,11 @@ public class AtlasBuilder {
             await builder.PreBuild(_atlas).ConfigureAwait(false);
         }
 
-        foreach(var builder in _builders) {
+        foreach(var builder in _builders)
+            await builder.Preload(_atlas).ConfigureAwait(false);
+
+        foreach(var builder in _builders)
             await builder.PostBuild(_atlas).ConfigureAwait(false);
-        }
 
         return _atlas;
     }

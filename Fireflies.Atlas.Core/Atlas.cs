@@ -40,10 +40,7 @@ public class Atlas : IDisposable {
     }
 
     public async Task<IEnumerable<TDocument>> GetDocuments<TDocument>(Expression predicate, CacheFlag cacheFlag = CacheFlag.Default, ExecutionFlags flags = ExecutionFlags.None) where TDocument : new() {
-        var startedAt = DateTimeOffset.UtcNow;
-
         var result = await GetDocuments<TDocument>(predicate, new QueryContext(), cacheFlag, flags).ConfigureAwait(false);
-        _logger.Trace(() => $"Got {result.Count()} documents in {(DateTimeOffset.UtcNow - startedAt).TotalMilliseconds}ms. Predicate: {predicate}");
 
         return result;
     }
@@ -53,9 +50,14 @@ public class Atlas : IDisposable {
         return result.FirstOrDefault();
     }
 
-    internal Task<IEnumerable<TDocument>> GetDocuments<TDocument>(Expression predicate, QueryContext queryContext, CacheFlag cacheFlag = CacheFlag.Default, ExecutionFlags flags = ExecutionFlags.None) where TDocument : new() {
+    internal async Task<IEnumerable<TDocument>> GetDocuments<TDocument>(Expression predicate, QueryContext queryContext, CacheFlag cacheFlag = CacheFlag.Default, ExecutionFlags flags = ExecutionFlags.None) where TDocument : new() {
+        var startedAt = DateTimeOffset.UtcNow;
+
         var dictionary = InternalGetDictionary<TDocument>();
-        var result = dictionary == null ? Task.FromResult(Enumerable.Empty<TDocument>()) : dictionary.GetDocuments(predicate, queryContext, cacheFlag, flags);
+
+        var result = dictionary == null ? Enumerable.Empty<TDocument>() : await dictionary.GetDocuments(predicate, queryContext, cacheFlag, flags).ConfigureAwait(false);
+        _logger.Trace(() => $"Got {result.Count()} documents in {(DateTimeOffset.UtcNow - startedAt).TotalMilliseconds}ms. Predicate: {predicate}");
+
         return result;
     }
 
@@ -85,7 +87,7 @@ public class Atlas : IDisposable {
 
     public void Dispose() {
         foreach(var x in _dictionaries.Values) {
-           x.Dispose();
+            x.Dispose();
         }
     }
 
