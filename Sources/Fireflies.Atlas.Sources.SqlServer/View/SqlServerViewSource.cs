@@ -1,5 +1,4 @@
 ﻿using System.Linq.Expressions;
-using System.Reflection.Metadata;
 using Fireflies.Atlas.Core;
 using Fireflies.Atlas.Core.Helpers;
 using Fireflies.Logging.Abstractions;
@@ -75,28 +74,32 @@ public class SqlServerViewSource<TDocument> : AtlasSource<TDocument> where TDocu
     private async Task UpdateDocument(TDocument currentDocument) {
         var keyQuery = DocumentHelpers.BuildKeyExpressionFromDocument(currentDocument);
         var viewDocuments = await GetDocuments(keyQuery, ExecutionFlags.None).ConfigureAwait(false);
-        var viewDocument = viewDocuments.First().Document;
-        if(viewDocument == null) {
-            // Document not returned from view
-            if(currentDocument != null) {
-                // Did we have in in cache?
-                _atlas.DeleteDocument(currentDocument); // Then delete it
-            }
-        } else if(_compiledFilter != null && !_compiledFilter(viewDocument)) {
-            // We have a new document from view, does it match the filter?
-            _atlas.DeleteDocument(viewDocument); // Otherwise delete it
-        } else {
-            // Otherwise, lets update the document
-            if(currentDocument == null) {
-                // New document
-                _atlas.UpdateDocument(viewDocument);
+        foreach(var entry in viewDocuments) {
+            var viewDocument = entry.Document;
+            if(viewDocument == null) {
+                // Document not returned from view
+                if(currentDocument != null) {
+                    // Did we have in in cache?
+                    _atlas.DeleteDocument(currentDocument); // Then delete it
+                }
+            } else if(_compiledFilter != null && !_compiledFilter(viewDocument)) {
+                // We have a new document from view, does it match the filter?
+                _atlas.DeleteDocument(viewDocument); // Otherwise delete it
             } else {
-                if(DocumentComparer.Equals(viewDocument, currentDocument, true)) {
-                    // Noop, change did not affect cached view document
-                } else {
+                // Otherwise, lets update the document
+                if(currentDocument == null) {
+                    // New document
                     _atlas.UpdateDocument(viewDocument);
+                } else {
+                    if(DocumentComparer.Equals(viewDocument, currentDocument, true)) {
+                        // Noop, change did not affect cached view document
+                    } else {
+                        _atlas.UpdateDocument(viewDocument);
+                    }
                 }
             }
+
+            break;
         }
     }
 

@@ -13,7 +13,7 @@ namespace Fireflies.Atlas.Sources.SqlServer.Monitor;
 public class SqlMonitor : IDisposable {
     private readonly string _connectionString;
     private readonly Core.Atlas _atlas;
-    private readonly ConcurrentDictionary<SqlDescriptor, TableNotification> _monitors = new();
+    private readonly ConcurrentDictionary<SqlDescriptor, MonitorEntry> _monitors = new();
     private static bool _initialized;
     private readonly Guid _uuid = Guid.NewGuid();
     private readonly Timer _timer;
@@ -86,12 +86,15 @@ public class SqlMonitor : IDisposable {
                     _lastReadUpdate = updateId;
                 var tableDescriptor = new SqlDescriptor((string)sqlDataReader[1], (string)sqlDataReader[2]);
 
-                if(_monitors.TryGetValue(tableDescriptor, out var notificationRegistry)) {
+                if(_monitors.TryGetValue(tableDescriptor, out var monitor)) {
                     var value = XDocument.Parse((string)sqlDataReader[3]);
                     var json = JsonConvert.SerializeXNode(value, Formatting.None, true);
                     var jsonDocument = JsonSerializer.Deserialize<JsonObject>(json);
-                    if(jsonDocument != null)
-                        notificationRegistry.Process(jsonDocument);
+                    if(jsonDocument == null) continue;
+
+                    foreach(var tableNotification in monitor.TableNotifications) {
+                        tableNotification.Process(jsonDocument);
+                    }
                 }
             }
         } finally {
@@ -124,19 +127,17 @@ public class SqlMonitor : IDisposable {
             _timer.Change(TimeSpan.FromSeconds(20), TimeSpan.FromSeconds(20));
         }
 
-        var monitorAdded = false;
         var monitor = _monitors.GetOrAdd(sqlDescriptor, _ => {
-            _logger.Trace($"Creating monitor for {sqlDescriptor}");
-            monitorAdded = true;
-            return new TableNotification<TDocument>();
-        });
-
-        if(monitorAdded) {
             _logger.Debug($"Adding monitor for {sqlDescriptor}");
             AddMonitor(sqlDescriptor);
-        }
 
-        return (TableNotification<TDocument>)monitor;
+            return new MonitorEntry(sqlDescriptor);
+        });
+
+        var tableNotification = monitor.AddTableNotification<TDocument>();
+        _logger.Trace($"Created {nameof(TableNotification<TDocument>)} for {sqlDescriptor}");
+
+        return tableNotification;
     }
 
     private void AddMonitor(SqlDescriptor sqlDescriptor) {
@@ -199,5 +200,36 @@ public class SqlMonitor : IDisposable {
         _dependencyConnection?.Dispose();
 
         RemoveListener();
+    }
+
+    private class MonitorEntry {
+        private readonly ConcurrentDictionary<Type, TableNotification> _tableNotifications = new();
+
+        public SqlDescriptor SqlDescriptor { get; }
+        public IEnumerable<TableNotification> TableNotifications => _tableNotifications.Values;
+
+        public MonitorEntry(SqlDescriptor sqlDescriptor) {
+            SqlDescriptor = sqlDescriptor;
+        }
+
+        protected bool Equals(MonitorEntry other) {
+            return SqlDescriptor.Equals(other.SqlDescriptor);
+        }
+
+        public override bool Equals(object? obj) {
+            if(ReferenceEquals(null, obj)) return false;
+            if(ReferenceEquals(this, obj)) return true;
+            if(obj.GetType() != this.GetType()) return false;
+
+            return Equals((MonitorEntry)obj);
+        }
+
+        public override int GetHashCode() {
+            return SqlDescriptor.GetHashCode();
+        }
+
+        public TableNotification<TDocument> AddTableNotification<TDocument>() where TDocument : new() {
+            return (TableNotification<TDocument>)_tableNotifications.GetOrAdd(typeof(TDocument), new TableNotification<TDocument>());
+        }
     }
 }
