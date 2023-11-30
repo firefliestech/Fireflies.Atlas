@@ -2,6 +2,8 @@
 using System.Reflection.Emit;
 using System.Reflection;
 using Fireflies.Atlas.Core.Wrapper;
+using Fireflies.Atlas.Annotations;
+using Fireflies.Atlas.Core.Helpers;
 
 namespace Fireflies.Atlas.Core;
 
@@ -31,6 +33,9 @@ public class AtlasBuilder {
     }
 
     public AtlasDocumentBuilder<TDocument> AddDocument<TDocument>() where TDocument : new() {
+        if(!TypeHelpers.GetAtlasProperties<TDocument>().Any())
+            throw new ArgumentException($"{typeof(TDocument)} does not contain any properties with {nameof(AtlasFieldAttribute)}");
+
         var builder = new AtlasDocumentBuilder<TDocument>(_atlas, _wrapperGenerator);
         _builders.Add(builder);
         return builder;
