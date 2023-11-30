@@ -1,5 +1,6 @@
 ﻿using System.Linq.Expressions;
 using Fireflies.Atlas.Core;
+using Fireflies.Atlas.Sources.SqlServer.View;
 
 namespace Fireflies.Atlas.Sources.SqlServer.Table;
 
@@ -9,24 +10,28 @@ public class SqlServerTableSource<TDocument> : AtlasSource<TDocument> where TDoc
     private readonly SqlDescriptor _tableDescriptor;
     private readonly Expression<Func<TDocument, bool>>? _filterExpression;
     private readonly Func<TDocument, bool>? _compiledFilter;
+    private readonly bool _cacheEnabled;
 
-    public SqlServerTableSource(Core.Atlas atlas, SqlServerSource source, SqlDescriptor tableDescriptor, Expression<Func<TDocument, bool>>? filterExpression) {
+    public SqlServerTableSource(Core.Atlas atlas, SqlServerSource source, SqlDescriptor tableDescriptor, SqlServerTableSourceBuilder<TDocument> builder) {
         _atlas = atlas;
         _source = source;
         _tableDescriptor = tableDescriptor;
-        _filterExpression = filterExpression;
-        _compiledFilter = filterExpression?.Compile();
+        _filterExpression = builder.Filter;
+        _compiledFilter = _filterExpression?.Compile();
+        _cacheEnabled = builder.CacheEnabled;
 
-        var monitor = _source.UpdateFetcher.MonitorTable<TDocument>(_tableDescriptor);
-        monitor.Deleted += MonitorOnDeleted;
-        monitor.Inserted += MonitorOnInserted;
-        monitor.Updated += MonitorOnUpdated;
+        if(builder.TableMonitorEnabled) {
+            var monitor = _source.UpdateFetcher.MonitorTable<TDocument>(_tableDescriptor);
+            monitor.Deleted += MonitorOnDeleted;
+            monitor.Inserted += MonitorOnInserted;
+            monitor.Updated += MonitorOnUpdated;
+        }
     }
 
     public override async Task<IEnumerable<(bool Cache, TDocument Document)>> GetDocuments(Expression<Func<TDocument, bool>>? predicate, ExecutionFlags flags) {
         var result = await _source.GetDocuments(predicate, _tableDescriptor, _filterExpression, flags).ConfigureAwait(false);
-        if(_compiledFilter == null)
-            return result.Select(x => (true, x));
+        if(_compiledFilter == null || !_cacheEnabled)
+            return result.Select(x => (_cacheEnabled, x));
 
         return result.Select(x => (_compiledFilter(x), x));
     }

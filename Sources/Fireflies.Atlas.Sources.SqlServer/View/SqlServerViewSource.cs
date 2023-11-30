@@ -12,15 +12,18 @@ public class SqlServerViewSource<TDocument> : AtlasSource<TDocument> where TDocu
     private readonly Expression<Func<TDocument, bool>>? _filterExpression;
     private readonly Func<TDocument, bool>? _compiledFilter;
     private readonly IFirefliesLogger _logger;
+    private readonly bool _cacheEnabled;
 
-    public SqlServerViewSource(Core.Atlas atlas, SqlServerSource source, SqlDescriptor viewDescriptor, IEnumerable<SqlServerViewSourceTableTrigger> tableTriggers, Expression<Func<TDocument, bool>>? filterExpression) {
+    public SqlServerViewSource(Core.Atlas atlas, SqlServerSource source, SqlDescriptor viewDescriptor, SqlServerViewSourceBuilder<TDocument> builder) {
         _atlas = atlas;
         _source = source;
         _viewDescriptor = viewDescriptor;
-        _filterExpression = filterExpression;
-        _compiledFilter = filterExpression?.Compile();
+        _filterExpression = builder.Filter;
+        _compiledFilter = _filterExpression?.Compile();
+        _cacheEnabled = builder.CacheEnabled;
         _logger = atlas.LoggerFactory.GetLogger<SqlServerViewSource<TDocument>>();
 
+        var tableTriggers = builder.TableTriggerBuilders.Select(x => x.Build());
         foreach(var trigger in tableTriggers) {
             var monitor = _source.UpdateFetcher.MonitorTable<TDocument>(trigger.SqlDescriptor);
 
@@ -32,8 +35,8 @@ public class SqlServerViewSource<TDocument> : AtlasSource<TDocument> where TDocu
 
     public override async Task<IEnumerable<(bool Cache, TDocument Document)>> GetDocuments(Expression<Func<TDocument, bool>>? predicate, ExecutionFlags flags) {
         var result = await _source.GetDocuments(predicate, _viewDescriptor, _filterExpression, flags).ConfigureAwait(false);
-        if(_compiledFilter == null)
-            return result.Select(x => (true, x));
+        if(_compiledFilter == null || !_cacheEnabled)
+            return result.Select(x => (_cacheEnabled, x));
 
         return result.Select(x => (_compiledFilter(x), x));
     }
