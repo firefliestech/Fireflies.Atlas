@@ -14,7 +14,7 @@ public class XmlStringToEnumConverter : System.Text.Json.Serialization.JsonConve
 
         return int.TryParse(value, out var intValue) ?
             Enum.ToObject(typeToConvert, intValue) :
-            Enum.Parse(typeToConvert, value);
+            Enum.Parse(typeToConvert, value, true);
     }
 
     public override void Write(Utf8JsonWriter writer, object value, JsonSerializerOptions options) {
