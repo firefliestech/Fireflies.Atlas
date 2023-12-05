@@ -4,12 +4,10 @@ using Fireflies.Logging.Abstractions;
 
 namespace Fireflies.Atlas.Core;
 
-public class Atlas : IDisposable {
+public class Atlas : IAtlas {
     private readonly ConcurrentDictionary<Type, AtlasDocumentDictionary> _dictionaries = new();
     private IFirefliesLoggerFactory _loggerFactory = new NullLoggerFactory();
     private IFirefliesLogger _logger;
-
-    internal IEnumerable<AtlasDocumentDictionary> DocumentDictionaries => _dictionaries.Values;
 
     public Atlas() {
         _logger = _loggerFactory.GetLogger<Atlas>();
