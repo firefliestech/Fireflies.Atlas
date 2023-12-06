@@ -12,9 +12,11 @@ public class XmlStringToEnumConverter : System.Text.Json.Serialization.JsonConve
         if(value == null)
             return default;
 
+        var type = Nullable.GetUnderlyingType(typeToConvert) ?? typeToConvert;
+
         return int.TryParse(value, out var intValue) ?
-            Enum.ToObject(typeToConvert, intValue) :
-            Enum.Parse(typeToConvert, value, true);
+            Enum.ToObject(type, intValue) :
+            Enum.Parse(type, value, true);
     }
 
     public override void Write(Utf8JsonWriter writer, object value, JsonSerializerOptions options) {
