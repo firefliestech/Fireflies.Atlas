@@ -1,6 +1,6 @@
 ﻿using System.Linq.Expressions;
 
-namespace Fireflies.Atlas.Sources.SqlServer.View;
+namespace Fireflies.Atlas.Sources.SqlServer.Table;
 
 public class SqlServerTableSourceBuilder<TDocument> {
     internal bool TableMonitorEnabled { get; private set; } = true;

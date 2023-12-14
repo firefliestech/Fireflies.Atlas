@@ -46,7 +46,7 @@ public class LambdaToSqlTranslator<T> : ExpressionVisitor, IDisposable {
     }
 
     private void AddFrom(SqlDescriptor sqlDescriptor) {
-        _sqlAccumulator.Append($" FROM {sqlDescriptor.Schema}.{sqlDescriptor.Table}");
+        _sqlAccumulator.Append($" FROM {sqlDescriptor.AsSql}");
     }
 
     private void AddWhere(Expression expression) {

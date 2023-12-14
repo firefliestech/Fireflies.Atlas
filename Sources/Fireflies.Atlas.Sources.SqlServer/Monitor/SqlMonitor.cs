@@ -84,7 +84,7 @@ public class SqlMonitor : IDisposable {
                 var updateId = (int)sqlDataReader[0];
                 if(_lastReadUpdate < updateId)
                     _lastReadUpdate = updateId;
-                var tableDescriptor = new SqlDescriptor((string)sqlDataReader[1], (string)sqlDataReader[2]);
+                var tableDescriptor = new SqlNameDescriptor((string)sqlDataReader[1], (string)sqlDataReader[2]);
 
                 if(_monitors.TryGetValue(tableDescriptor, out var monitor)) {
                     var value = XDocument.Parse((string)sqlDataReader[3]);
@@ -102,7 +102,7 @@ public class SqlMonitor : IDisposable {
         }
     }
 
-    public TableNotification<TDocument> MonitorTable<TDocument>(SqlDescriptor sqlDescriptor) where TDocument : new() {
+    public TableNotification<TDocument> MonitorTable<TDocument>(SqlNameDescriptor sqlDescriptor) where TDocument : new() {
         if(!_initialized) {
             _logger.Debug("Initializing monitor infrastructure");
             _initialized = true;
@@ -140,7 +140,7 @@ public class SqlMonitor : IDisposable {
         return tableNotification;
     }
 
-    private void AddMonitor(SqlDescriptor sqlDescriptor) {
+    private void AddMonitor(SqlNameDescriptor sqlDescriptor) {
         try {
             _logger.Trace($"Running {nameof(AddMonitor)}");
             using var connection = new SqlConnection(_connectionString);

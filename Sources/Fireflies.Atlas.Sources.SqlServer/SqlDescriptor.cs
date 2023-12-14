@@ -1,8 +1,16 @@
 ﻿namespace Fireflies.Atlas.Sources.SqlServer;
 
-public class SqlDescriptor {
+public abstract class SqlDescriptor {
+    internal abstract string AsSql { get; }
+
+    //public static implicit operator SqlDescriptor(string descriptor) => new(descriptor);
+}
+
+public class SqlNameDescriptor : SqlDescriptor {
     private string _schema = null!;
     private string _table = null!;
+
+    internal override string AsSql => $"{Schema}.{Table}";
 
     public string Schema {
         get => _schema;
@@ -24,12 +32,12 @@ public class SqlDescriptor {
         }
     }
 
-    public SqlDescriptor(string schema, string table) {
+    public SqlNameDescriptor(string schema, string table) {
         Schema = schema;
         Table = table;
     }
 
-    public SqlDescriptor(string descriptor) {
+    public SqlNameDescriptor(string descriptor) {
         var parts = descriptor.Split(".");
         switch(parts.Length) {
             case 1:
@@ -45,7 +53,7 @@ public class SqlDescriptor {
         }
     }
 
-    protected bool Equals(SqlDescriptor other) {
+    protected bool Equals(SqlNameDescriptor other) {
         return _schema.ToUpper() == other._schema.ToUpper() && _table.ToUpper() == other._table.ToUpper();
     }
 
@@ -54,7 +62,7 @@ public class SqlDescriptor {
         if(ReferenceEquals(this, obj)) return true;
         if(obj.GetType() != this.GetType()) return false;
 
-        return Equals((SqlDescriptor)obj);
+        return Equals((SqlNameDescriptor)obj);
     }
 
     public override int GetHashCode() {
@@ -64,6 +72,30 @@ public class SqlDescriptor {
     public override string ToString() {
         return $"{Schema}.{Table}";
     }
+}
 
-    public static implicit operator SqlDescriptor(string descriptor) => new(descriptor);
+public class SqlQueryDescriptor : SqlDescriptor {
+    private readonly string _query;
+
+    internal override string AsSql => $"({_query}) AQ";
+
+    public SqlQueryDescriptor(string query) {
+        _query = query;
+    }
+
+    protected bool Equals(SqlQueryDescriptor other) {
+        return _query == other._query;
+    }
+
+    public override bool Equals(object? obj) {
+        if(ReferenceEquals(null, obj)) return false;
+        if(ReferenceEquals(this, obj)) return true;
+        if(obj.GetType() != this.GetType()) return false;
+
+        return Equals((SqlQueryDescriptor)obj);
+    }
+
+    public override int GetHashCode() {
+        return _query.GetHashCode();
+    }
 }

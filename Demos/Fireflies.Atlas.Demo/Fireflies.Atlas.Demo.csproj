@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net6.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+	<LangVersion>preview</LangVersion>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Fireflies.Atlas.Annotations\Fireflies.Atlas.Annotations.csproj" />
+    <ProjectReference Include="..\Fireflies.Atlas\Fireflies.Atlas.Core.csproj" />
+    <ProjectReference Include="..\Fireflies.Demo.Shared\Fireflies.Demo.Shared.csproj" />
+  </ItemGroup>
+
+</Project>

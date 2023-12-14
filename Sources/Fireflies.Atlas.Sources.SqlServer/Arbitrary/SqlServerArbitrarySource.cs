@@ -1,11 +1,12 @@
 ﻿using System.Linq.Expressions;
 using Fireflies.Atlas.Core;
 using Fireflies.Atlas.Core.Helpers;
+using Fireflies.Atlas.Sources.SqlServer.Arbitrary.View;
 using Fireflies.Logging.Abstractions;
 
-namespace Fireflies.Atlas.Sources.SqlServer.View;
+namespace Fireflies.Atlas.Sources.SqlServer.Arbitrary;
 
-public class SqlServerViewSource<TDocument> : AtlasSource<TDocument> where TDocument : new() {
+public abstract class SqlServerArbitrarySource<TDocument> : AtlasSource<TDocument> where TDocument : new() {
     private readonly Core.Atlas _atlas;
     private readonly SqlServerSource _source;
     private readonly SqlDescriptor _viewDescriptor;
@@ -14,7 +15,7 @@ public class SqlServerViewSource<TDocument> : AtlasSource<TDocument> where TDocu
     private readonly IFirefliesLogger _logger;
     private readonly bool _cacheEnabled;
 
-    public SqlServerViewSource(Core.Atlas atlas, SqlServerSource source, SqlDescriptor viewDescriptor, SqlServerViewSourceBuilder<TDocument> builder) {
+    protected SqlServerArbitrarySource(Core.Atlas atlas, SqlServerSource source, SqlDescriptor viewDescriptor, SqlServerArbitrarySourceBuilder<TDocument> builder) {
         _atlas = atlas;
         _source = source;
         _viewDescriptor = viewDescriptor;
@@ -41,14 +42,14 @@ public class SqlServerViewSource<TDocument> : AtlasSource<TDocument> where TDocu
         return result.Select(x => (_compiledFilter(x), x));
     }
 
-    private async void MonitorOnUpdated(SqlServerViewSourceTableTrigger trigger, TDocument newDocument, Lazy<TDocument> deletedDocument) {
+    private async void MonitorOnUpdated(SqlServerArbitrarySourceTableTrigger trigger, TDocument newDocument, Lazy<TDocument> deletedDocument) {
         _logger.Trace(() => $"Document was updated. Trigger: {trigger.SqlDescriptor}. New: {DocumentHelpers.AsString(newDocument)}. Old: {DocumentHelpers.AsString(deletedDocument.Value)}");
         var triggerExpression = BuildTriggerExpressionFromDocument(trigger, deletedDocument.Value);
         var documentsThatNeedsToBeReloaded = await _atlas.GetDocuments(triggerExpression, CacheFlag.OnlyCache).ConfigureAwait(false);
         HandleUpsert(documentsThatNeedsToBeReloaded);
     }
 
-    private async void MonitorOnInserted(SqlServerViewSourceTableTrigger trigger, TDocument newDocument) {
+    private async void MonitorOnInserted(SqlServerArbitrarySourceTableTrigger trigger, TDocument newDocument) {
         _logger.Trace(() => $"Document was inserted. Trigger: {trigger.SqlDescriptor}. New: {DocumentHelpers.AsString(newDocument)}");
         if(trigger.HasKeyField) {
             await UpdateDocument(newDocument).ConfigureAwait(false);
@@ -60,7 +61,7 @@ public class SqlServerViewSource<TDocument> : AtlasSource<TDocument> where TDocu
         HandleUpsert(documentsThatNeedsToBeReloaded);
     }
 
-    private async void MonitorOnDeleted(SqlServerViewSourceTableTrigger trigger, TDocument deletedDocument) {
+    private async void MonitorOnDeleted(SqlServerArbitrarySourceTableTrigger trigger, TDocument deletedDocument) {
         _logger.Trace(() => $"Document was deleted. Trigger: {trigger.SqlDescriptor}. Deleted: {DocumentHelpers.AsString(deletedDocument)}");
         var queryExpression = BuildTriggerExpressionFromDocument(trigger, deletedDocument);
         var currentDocument = await _atlas.GetDocument(queryExpression, CacheFlag.OnlyCache).ConfigureAwait(false);
@@ -106,7 +107,7 @@ public class SqlServerViewSource<TDocument> : AtlasSource<TDocument> where TDocu
         }
     }
 
-    private Expression<Func<TDocument, bool>> BuildTriggerExpressionFromDocument(SqlServerViewSourceTableTrigger trigger, TDocument document) {
+    private Expression<Func<TDocument, bool>> BuildTriggerExpressionFromDocument(SqlServerArbitrarySourceTableTrigger trigger, TDocument document) {
         Expression? body = null;
         var param = Expression.Parameter(typeof(TDocument), "document");
         foreach(var property in trigger.Fields) {

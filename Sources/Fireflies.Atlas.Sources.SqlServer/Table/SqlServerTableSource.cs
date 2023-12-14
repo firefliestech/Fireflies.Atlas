@@ -1,18 +1,17 @@
 ﻿using System.Linq.Expressions;
 using Fireflies.Atlas.Core;
-using Fireflies.Atlas.Sources.SqlServer.View;
 
 namespace Fireflies.Atlas.Sources.SqlServer.Table;
 
 public class SqlServerTableSource<TDocument> : AtlasSource<TDocument> where TDocument : new() {
     private readonly Core.Atlas _atlas;
     private readonly SqlServerSource _source;
-    private readonly SqlDescriptor _tableDescriptor;
+    private readonly SqlNameDescriptor _tableDescriptor;
     private readonly Expression<Func<TDocument, bool>>? _filterExpression;
     private readonly Func<TDocument, bool>? _compiledFilter;
     private readonly bool _cacheEnabled;
 
-    public SqlServerTableSource(Core.Atlas atlas, SqlServerSource source, SqlDescriptor tableDescriptor, SqlServerTableSourceBuilder<TDocument> builder) {
+    public SqlServerTableSource(Core.Atlas atlas, SqlServerSource source, SqlNameDescriptor tableDescriptor, SqlServerTableSourceBuilder<TDocument> builder) {
         _atlas = atlas;
         _source = source;
         _tableDescriptor = tableDescriptor;
