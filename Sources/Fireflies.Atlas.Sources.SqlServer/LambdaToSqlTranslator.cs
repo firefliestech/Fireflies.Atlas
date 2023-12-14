@@ -2,6 +2,7 @@
 using System.Reflection;
 using System.Text;
 using Fireflies.Atlas.Annotations;
+using Fireflies.Atlas.Core;
 
 namespace Fireflies.Atlas.Sources.SqlServer;
 
@@ -54,7 +55,7 @@ public class LambdaToSqlTranslator<T> : ExpressionVisitor, IDisposable {
     }
 
     protected override Expression VisitUnary(UnaryExpression u) {
-        switch (u.NodeType) {
+        switch(u.NodeType) {
             case ExpressionType.Not:
                 _sqlAccumulator.Append(" NOT ");
                 Visit(u.Operand);
@@ -73,7 +74,7 @@ public class LambdaToSqlTranslator<T> : ExpressionVisitor, IDisposable {
         _sqlAccumulator.Append("(");
         Visit(b.Left);
 
-        switch (b.NodeType) {
+        switch(b.NodeType) {
             case ExpressionType.And:
                 _sqlAccumulator.Append(" AND ");
                 break;
@@ -115,76 +116,91 @@ public class LambdaToSqlTranslator<T> : ExpressionVisitor, IDisposable {
     }
 
     protected override Expression VisitMethodCall(MethodCallExpression node) {
-        if (node.Object is not MemberExpression memberExpression || node.Arguments.Count != 1 || node.Arguments[0] is not ConstantExpression constantArgument) {
+        if(node.Object is not MemberExpression memberExpression || node.Arguments.Count != 1 || node.Arguments[0] is not ConstantExpression constantArgument) {
             throw new NotSupportedException($"The method call '{node.Method}' is not supported");
         }
 
-        if (node.Method == StringContainsMethodInfo || node.Method == StringContainsWithStringComparisonMethodInfo) {
+        if(node.Method == StringContainsMethodInfo || node.Method == StringContainsWithStringComparisonMethodInfo) {
             Visit(memberExpression);
             _sqlAccumulator.Append($" LIKE '%{constantArgument.Value}%'");
             return node;
         }
 
-        if (node.Method == StringStartsWithMethodInfo || node.Method == StringStartsWithWithStringComparisonMethodInfo) {
+        if(node.Method == StringStartsWithMethodInfo || node.Method == StringStartsWithWithStringComparisonMethodInfo) {
             Visit(memberExpression);
             _sqlAccumulator.Append($" LIKE '{constantArgument.Value}%'");
             return node;
         }
 
-        if (node.Method == StringEndWithMethodInfo || node.Method == StringEndsWithWithStringComparisonMethodInfo) {
+        if(node.Method == StringEndWithMethodInfo || node.Method == StringEndsWithWithStringComparisonMethodInfo) {
             Visit(memberExpression);
             _sqlAccumulator.Append($" LIKE '%{constantArgument.Value}'");
             return node;
         }
 
-        throw new NotSupportedException($"The method call '{node.Method}' is not supported");
+        var methodValue = ExpressionHelper.GetValue(node);
+        AddConstantValue(methodValue);
+
+        return node;
     }
 
     protected override Expression VisitConstant(ConstantExpression c) {
-        var q = c.Value as IQueryable;
+        AddConstantValue(c.Value);
+        return c;
+    }
 
-        switch (q) {
-            case null when c.Value == null:
-                _sqlAccumulator.Append("NULL");
-                break;
+    private void AddConstantValue(object? value) {
+        var q = value as IQueryable;
+
+        if(value == null) {
+            _sqlAccumulator.Append("NULL");
+            return;
+        }
+
+        switch(q) {
             case null:
-                switch (Type.GetTypeCode(c.Value.GetType())) {
+                var nullableType = value.GetType();
+                var type = Nullable.GetUnderlyingType(nullableType) ?? nullableType;
+                switch(Type.GetTypeCode(type)) {
                     case TypeCode.Boolean:
-                        _sqlAccumulator.Append((bool)c.Value ? 1 : 0);
+                        _sqlAccumulator.Append((bool)value ? 1 : 0);
                         break;
 
                     case TypeCode.String:
-                        _sqlAccumulator.Append("'");
-                        _sqlAccumulator.Append(c.Value);
-                        _sqlAccumulator.Append("'");
+                        AppendStringValue(value);
                         break;
 
                     case TypeCode.DateTime:
-                        _sqlAccumulator.Append("'");
-                        _sqlAccumulator.Append(c.Value);
-                        _sqlAccumulator.Append("'");
+                        AppendStringValue(value);
                         break;
 
-                    case TypeCode.Object:
-                        throw new NotSupportedException($"The constant for '{c.Value}' is not supported");
+                    case TypeCode.Object: {
+                        if(type == typeof(DateTimeOffset)) {
+                            _sqlAccumulator.Append("CONVERT(DateTimeOffset, '");
+                            _sqlAccumulator.Append(value);
+                            _sqlAccumulator.Append("')");
+                        } else {
+                            throw new NotSupportedException($"The constant for '{value}' is not supported");
+                        }
+
+                        break;
+                    }
 
                     default:
-                        _sqlAccumulator.Append(c.Value);
+                        _sqlAccumulator.Append(value);
                         break;
                 }
 
                 break;
         }
-
-        return c;
     }
 
     protected override Expression VisitMember(MemberExpression m) {
-        if (m.Expression is not { NodeType: ExpressionType.Parameter })
+        if(m.Expression is not { NodeType: ExpressionType.Parameter })
             throw new NotSupportedException($"The member '{m.Member.Name}' is not supported");
 
         var attribute = m.Member.GetCustomAttributes(typeof(AtlasFieldAttribute), true).Cast<AtlasFieldAttribute>().FirstOrDefault();
-        if (attribute != null && !string.IsNullOrWhiteSpace(attribute.Name)) {
+        if(attribute != null && !string.IsNullOrWhiteSpace(attribute.Name)) {
             _sqlAccumulator.Append(attribute.Name);
         } else {
             _sqlAccumulator.Append(m.Member.Name);
@@ -194,7 +210,14 @@ public class LambdaToSqlTranslator<T> : ExpressionVisitor, IDisposable {
     }
 
     protected bool IsNullConstant(Expression exp) {
-        return (exp.NodeType == ExpressionType.Constant && ((ConstantExpression)exp).Value == null);
+        var value = ExpressionHelper.GetValue(exp);
+        return value == null;
+    }
+
+    private void AppendStringValue(object c) {
+        _sqlAccumulator.Append("'");
+        _sqlAccumulator.Append(c);
+        _sqlAccumulator.Append("'");
     }
 
     public void Dispose() {
