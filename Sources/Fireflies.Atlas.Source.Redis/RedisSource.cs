@@ -4,7 +4,6 @@ using System.Reflection;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Fireflies.Atlas.Core;
-using Fireflies.Atlas.Core.Helpers;
 using StackExchange.Redis;
 
 namespace Fireflies.Atlas.Source.Redis;
@@ -33,9 +32,16 @@ public class RedisSource {
         var db = _redis.GetDatabase(hashDescriptor.Database);
         var redisValue = await db.HashGetAsync(hashDescriptor.Key, new RedisValue(keyValue)).ConfigureAwait(false);
         if(redisValue.HasValue) {
-            var document = JsonSerializer.Deserialize<TDocument>(redisValue!, _serializerOptions)!;
-            hashDescriptor.KeyProperty.SetValue(document, Convert.ChangeType(keyValue, hashDescriptor.KeyProperty.PropertyType));
-            return new[] { (false, document) };
+            if(hashDescriptor.ValueProperty != null) {
+                var document = Activator.CreateInstance<TDocument>();
+                hashDescriptor.KeyProperty.SetValue(document, Convert.ChangeType(keyValue, hashDescriptor.KeyProperty.PropertyType));
+                hashDescriptor.ValueProperty.SetValue(document, JsonSerializer.Deserialize(redisValue!, hashDescriptor.ValueProperty.PropertyType, _serializerOptions)!);
+                return new[] { (false, document) };
+            } else {
+                var document = JsonSerializer.Deserialize<TDocument>(redisValue!, _serializerOptions)!;
+                hashDescriptor.KeyProperty.SetValue(document, Convert.ChangeType(keyValue, hashDescriptor.KeyProperty.PropertyType));
+                return new[] { (false, document) };
+            }
         }
 
         return Array.Empty<(bool, TDocument)>();
