@@ -27,6 +27,11 @@ public class SqlServerTableSource<TDocument> : AtlasSource<TDocument> where TDoc
         }
     }
 
+    public override void Validate(AtlasDocumentBuilder atlasBuilder) {
+        if(atlasBuilder.Preload && !_cacheEnabled)
+            throw new AtlasException($"If {nameof(atlasBuilder.Preload)} is enabled cache cant´t be disabled");
+    }
+
     public override async Task<IEnumerable<(bool Cache, TDocument Document)>> GetDocuments(Expression<Func<TDocument, bool>>? predicate, ExecutionFlags flags) {
         var result = await _source.GetDocuments(predicate, _tableDescriptor, _filterExpression, flags).ConfigureAwait(false);
         if(_compiledFilter == null || !_cacheEnabled)

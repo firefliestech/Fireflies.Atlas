@@ -6,10 +6,11 @@ namespace Fireflies.Atlas.Core;
 public abstract class AtlasDocumentBuilder {
     internal Type DocumentType { get; set; }
 
-    public AtlasSource Source { get; set; }
+    public AtlasSource Source { get; protected set; }
+    public bool Preload { get; protected set; }
 
     internal abstract Task PreBuild(Atlas atlas);
-    internal abstract Task Preload(Atlas atlas);
+    internal abstract Task InternalPreload(Atlas atlas);
     internal abstract Task PostBuild(Atlas atlas);
 }
 
@@ -18,7 +19,6 @@ public class AtlasDocumentBuilder<TDocument> : AtlasDocumentBuilder where TDocum
     private readonly WrapperGenerator _wrapperGenerator;
     private readonly AtlasDocumentDictionary<TDocument> _dictionary;
     private readonly List<AtlasRelation<TDocument>> _relations = new();
-    private bool _preload;
 
     private Func<Atlas, AtlasDocumentDictionary<TDocument>, Task>? _beforePreload;
     private Func<Atlas, AtlasDocumentDictionary<TDocument>, Task>? _afterPreload;
@@ -41,7 +41,7 @@ public class AtlasDocumentBuilder<TDocument> : AtlasDocumentBuilder where TDocum
     }
 
     public AtlasDocumentBuilder<TDocument> PreloadDocuments() {
-        _preload = true;
+        Preload = true;
         return this;
     }
 
@@ -65,8 +65,8 @@ public class AtlasDocumentBuilder<TDocument> : AtlasDocumentBuilder where TDocum
         return Task.CompletedTask;
     }
 
-    internal override async Task Preload(Atlas atlas) {
-        if(!_preload)
+    internal override async Task InternalPreload(Atlas atlas) {
+        if(!Preload)
             return;
 
         if(_beforePreload != null)

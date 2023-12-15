@@ -34,6 +34,11 @@ public abstract class SqlServerArbitrarySource<TDocument> : AtlasSource<TDocumen
         }
     }
 
+    public override void Validate(AtlasDocumentBuilder atlasBuilder) {
+        if(atlasBuilder.Preload && !_cacheEnabled)
+            throw new AtlasException($"If {nameof(atlasBuilder.Preload)} is enabled cache cant´t be disabled");
+    }
+
     public override async Task<IEnumerable<(bool Cache, TDocument Document)>> GetDocuments(Expression<Func<TDocument, bool>>? predicate, ExecutionFlags flags) {
         var result = await _source.GetDocuments(predicate, _viewDescriptor, _filterExpression, flags).ConfigureAwait(false);
         if(_compiledFilter == null || !_cacheEnabled)
