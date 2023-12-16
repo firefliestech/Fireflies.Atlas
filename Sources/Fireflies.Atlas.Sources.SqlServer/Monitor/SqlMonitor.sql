@@ -83,25 +83,31 @@ BEGIN
 	
 				DECLARE @retvalOUT NVARCHAR(MAX)
 				DECLARE @message NVARCHAR(MAX)
+				DECLARE @trigger bit
+				SET @trigger = 0
 
 				SET @message = N''''<root><schema>['' + @Schema + '']</schema><table>['' + @Table + '']</table>''''
 
 				SET @retvalOUT = (SELECT * FROM INSERTED FOR XML PATH(''''row''''), ROOT (''''inserted''''))
 				IF (@retvalOUT IS NOT NULL) BEGIN
+					SET @trigger = 1
 					SET @message = @message + @retvalOUT
 				END
 
 				SET @retvalOUT = (SELECT * FROM DELETED FOR XML PATH(''''row''''), ROOT (''''deleted''''))
 				IF (@retvalOUT IS NOT NULL) BEGIN
+					SET @trigger = 1
 					SET @message = @message + @retvalOUT
-				END 
+				END
 
-				SET @message = @message + N''''</root>''''
+				IF @trigger = 1 BEGIN
+					SET @message = @message + N''''</root>''''
 
-				DECLARE @Handle UNIQUEIDENTIFIER;
-				BEGIN DIALOG @Handle FROM SERVICE FirefliesUpdateService TO SERVICE ''''FirefliesUpdateService'''' ON CONTRACT [FirefliesContract] WITH ENCRYPTION = OFF;
-				SEND ON CONVERSATION @Handle MESSAGE TYPE FirefliesUpdate(@message);
-				END CONVERSATION @Handle
+					DECLARE @Handle UNIQUEIDENTIFIER;
+					BEGIN DIALOG @Handle FROM SERVICE FirefliesUpdateService TO SERVICE ''''FirefliesUpdateService'''' ON CONTRACT [FirefliesContract] WITH ENCRYPTION = OFF;
+					SEND ON CONVERSATION @Handle MESSAGE TYPE FirefliesUpdate(@message);
+					END CONVERSATION @Handle
+				END
 			END''
 			EXEC sp_executesql @Sql
 
