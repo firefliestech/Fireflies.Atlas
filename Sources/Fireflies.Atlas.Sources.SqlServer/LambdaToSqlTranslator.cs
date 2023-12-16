@@ -6,7 +6,7 @@ using Fireflies.Atlas.Core;
 
 namespace Fireflies.Atlas.Sources.SqlServer;
 
-public class LambdaToSqlTranslator<T> : ExpressionVisitor, IDisposable {
+public class LambdaToSqlTranslator<T>(SqlDescriptor sqlDescriptor, Expression? expression, Expression? filter) : ExpressionVisitor, IDisposable {
     private readonly StringBuilder _sqlAccumulator = new();
     private static readonly MethodInfo? StringContainsMethodInfo = typeof(string).GetMethod(nameof(string.Contains), new[] { typeof(string) });
     private static readonly MethodInfo? StringContainsWithStringComparisonMethodInfo = typeof(string).GetMethod(nameof(string.Contains), new[] { typeof(string), typeof(StringComparison) });
@@ -15,7 +15,7 @@ public class LambdaToSqlTranslator<T> : ExpressionVisitor, IDisposable {
     private static readonly MethodInfo? StringEndWithMethodInfo = typeof(string).GetMethod(nameof(string.EndsWith), new[] { typeof(string) });
     private static readonly MethodInfo? StringEndsWithWithStringComparisonMethodInfo = typeof(string).GetMethod(nameof(string.StartsWith), new[] { typeof(string), typeof(StringComparison) });
 
-    public string Translate(SqlDescriptor sqlDescriptor, Expression? expression, Expression? filter) {
+    public string Translate( ) {
         AddSelect();
         AddColumns();
         AddFrom(sqlDescriptor);
@@ -166,12 +166,18 @@ public class LambdaToSqlTranslator<T> : ExpressionVisitor, IDisposable {
                         _sqlAccumulator.Append((bool)value ? 1 : 0);
                         break;
 
-                    case TypeCode.String:
-                        AppendStringValue(value);
-                        break;
-
-                    case TypeCode.DateTime:
-                        AppendStringValue(value);
+                    case TypeCode.SByte:
+                    case TypeCode.Byte:
+                    case TypeCode.Int16:
+                    case TypeCode.UInt16:
+                    case TypeCode.Int32:
+                    case TypeCode.UInt32:
+                    case TypeCode.Int64:
+                    case TypeCode.UInt64:
+                    case TypeCode.Single:
+                    case TypeCode.Double:
+                    case TypeCode.Decimal:
+                        _sqlAccumulator.Append(value);
                         break;
 
                     case TypeCode.Object: {
@@ -180,14 +186,14 @@ public class LambdaToSqlTranslator<T> : ExpressionVisitor, IDisposable {
                             _sqlAccumulator.Append(value);
                             _sqlAccumulator.Append("')");
                         } else {
-                            throw new NotSupportedException($"The constant for '{value}' is not supported");
+                            AppendStringValue(value);
                         }
 
                         break;
                     }
 
                     default:
-                        _sqlAccumulator.Append(value);
+                        AppendStringValue(value);
                         break;
                 }
 
@@ -210,8 +216,7 @@ public class LambdaToSqlTranslator<T> : ExpressionVisitor, IDisposable {
     }
 
     protected bool IsNullConstant(Expression exp) {
-        var value = ExpressionHelper.GetValue(exp);
-        return value == null;
+        return exp.NodeType == ExpressionType.Constant && ((ConstantExpression)exp).Value == null;
     }
 
     private void AppendStringValue(object c) {
