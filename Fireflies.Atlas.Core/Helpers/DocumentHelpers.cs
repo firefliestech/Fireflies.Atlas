@@ -6,12 +6,13 @@ public static class DocumentHelpers {
     public static int CalculateKey<TDocument>(TDocument document) {
         var current = 0;
 
-        foreach(var (property, _) in TypeHelpers.GetAtlasKeyProperties(typeof(TDocument))) {
+        var type = typeof(TDocument);
+        foreach(var (property, _) in TypeHelpers.GetAtlasKeyProperties(type)) {
             var value = property.GetValue(document);
             current = HashCode.Combine(current, value);
         }
 
-        return current;
+        return HashCode.Combine(current, type.GetHashCode());
     }
 
     public static bool IsAllKeysAssigned<TDocument>(TDocument document) {
