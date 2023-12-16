@@ -87,13 +87,17 @@ public class SqlMonitor : IDisposable {
                 var tableDescriptor = new SqlNameDescriptor((string)sqlDataReader[1], (string)sqlDataReader[2]);
 
                 if(_monitors.TryGetValue(tableDescriptor, out var monitor)) {
-                    var value = XDocument.Parse((string)sqlDataReader[3]);
-                    var json = JsonConvert.SerializeXNode(value, Formatting.None, true);
-                    var jsonDocument = JsonSerializer.Deserialize<JsonObject>(json);
-                    if(jsonDocument == null) continue;
+                    try {
+                        var value = XDocument.Parse((string)sqlDataReader[3]);
+                        var json = JsonConvert.SerializeXNode(value, Formatting.None, true);
+                        var jsonDocument = JsonSerializer.Deserialize<JsonObject>(json);
+                        if(jsonDocument == null) continue;
 
-                    foreach(var tableNotification in monitor.TableNotifications) {
-                        tableNotification.Process(jsonDocument);
+                        foreach(var tableNotification in monitor.TableNotifications) {
+                            tableNotification.Process(jsonDocument);
+                        }
+                    } catch(Exception ex) {
+                        _logger.Error(ex, $"Error while processing updates. XML: {sqlDataReader[3]}");
                     }
                 }
             }
