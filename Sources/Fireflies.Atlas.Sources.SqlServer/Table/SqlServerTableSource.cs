@@ -3,7 +3,7 @@ using Fireflies.Atlas.Core;
 
 namespace Fireflies.Atlas.Sources.SqlServer.Table;
 
-public class SqlServerTableSource<TDocument> : AtlasSource<TDocument> where TDocument : new() {
+public class SqlServerTableSource<TDocument> : AtlasSource<TDocument> where TDocument : class, new() {
     private readonly Core.Atlas _atlas;
     private readonly SqlServerSource _source;
     private readonly SqlNameDescriptor _tableDescriptor;
@@ -40,7 +40,7 @@ public class SqlServerTableSource<TDocument> : AtlasSource<TDocument> where TDoc
         return result.Select(x => (_compiledFilter(x), x));
     }
 
-    private void MonitorOnUpdated(TDocument newDocument, Lazy<TDocument> deletedDocument) {
+    private void MonitorOnUpdated(TDocument newDocument, TDocument deletedDocument) {
         HandleUpsert(newDocument);
     }
 

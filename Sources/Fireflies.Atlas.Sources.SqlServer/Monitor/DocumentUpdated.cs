@@ -1,3 +1,3 @@
 ﻿namespace Fireflies.Atlas.Sources.SqlServer.Monitor;
 
-public delegate void DocumentUpdated<TDocument>(TDocument newDocument, Lazy<TDocument> deletedDocument);
+public delegate void DocumentUpdated<in TDocument>(TDocument newDocument, TDocument deletedDocument);

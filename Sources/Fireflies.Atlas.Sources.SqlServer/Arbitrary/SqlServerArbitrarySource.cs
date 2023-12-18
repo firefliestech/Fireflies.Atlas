@@ -6,7 +6,7 @@ using Fireflies.Logging.Abstractions;
 
 namespace Fireflies.Atlas.Sources.SqlServer.Arbitrary;
 
-public abstract class SqlServerArbitrarySource<TDocument> : AtlasSource<TDocument> where TDocument : new() {
+public abstract class SqlServerArbitrarySource<TDocument> : AtlasSource<TDocument> where TDocument : class, new() {
     private readonly Core.Atlas _atlas;
     private readonly SqlServerSource _source;
     private readonly SqlDescriptor _viewDescriptor;
@@ -47,9 +47,9 @@ public abstract class SqlServerArbitrarySource<TDocument> : AtlasSource<TDocumen
         return result.Select(x => (_compiledFilter(x), x));
     }
 
-    private async void MonitorOnUpdated(SqlServerArbitrarySourceTableTrigger trigger, TDocument newDocument, Lazy<TDocument> deletedDocument) {
-        _logger.Trace(() => $"Document was updated. Trigger: {trigger.SqlDescriptor}. New: {DocumentHelpers.AsString(newDocument)}. Old: {DocumentHelpers.AsString(deletedDocument.Value)}");
-        var triggerExpression = BuildTriggerExpressionFromDocument(trigger, deletedDocument.Value);
+    private async void MonitorOnUpdated(SqlServerArbitrarySourceTableTrigger trigger, TDocument newDocument, TDocument deletedDocument) {
+        _logger.Trace(() => $"Document was updated. Trigger: {trigger.SqlDescriptor}. New: {DocumentHelpers.AsString(newDocument)}. Old: {DocumentHelpers.AsString(deletedDocument)}");
+        var triggerExpression = BuildTriggerExpressionFromDocument(trigger, deletedDocument);
         var documentsThatNeedsToBeReloaded = await _atlas.GetDocuments(triggerExpression, CacheFlag.OnlyCache).ConfigureAwait(false);
         HandleUpsert(documentsThatNeedsToBeReloaded);
     }

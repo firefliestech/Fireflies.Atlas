@@ -106,7 +106,7 @@ public class SqlMonitor : IDisposable {
         }
     }
 
-    public TableNotification<TDocument> MonitorTable<TDocument>(SqlNameDescriptor sqlDescriptor) where TDocument : new() {
+    public TableNotification<TDocument> MonitorTable<TDocument>(SqlNameDescriptor sqlDescriptor) where TDocument : class, new() {
         if(!_initialized) {
             _logger.Debug("Initializing monitor infrastructure");
             _initialized = true;
@@ -232,7 +232,7 @@ public class SqlMonitor : IDisposable {
             return SqlDescriptor.GetHashCode();
         }
 
-        public TableNotification<TDocument> AddTableNotification<TDocument>() where TDocument : new() {
+        public TableNotification<TDocument> AddTableNotification<TDocument>() where TDocument : class, new() {
             return (TableNotification<TDocument>)_tableNotifications.GetOrAdd(typeof(TDocument), new TableNotification<TDocument>());
         }
     }
