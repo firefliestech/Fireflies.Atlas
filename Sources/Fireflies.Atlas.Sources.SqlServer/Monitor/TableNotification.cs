@@ -57,7 +57,7 @@ public class TableNotification<TDocument> : TableNotification where TDocument : 
         }
     }
 
-    private static Dictionary<int, TDocument> GetDocuments(JsonNode? affectedRow, bool multipleAffectedRows) {
+    private Dictionary<int, TDocument> GetDocuments(JsonNode? affectedRow, bool multipleAffectedRows) {
         var documents = new Dictionary<int, TDocument>();
 
         if(affectedRow == null)
@@ -65,12 +65,12 @@ public class TableNotification<TDocument> : TableNotification where TDocument : 
 
         if(multipleAffectedRows) {
             foreach(var row in affectedRow.AsArray()) {
-                var insertedDocument = row.Deserialize<TDocument>();
+                var insertedDocument = row.Deserialize<TDocument>(_serializerOptions);
                 var key = DocumentHelpers.CalculateKey(insertedDocument);
                 documents[key] = insertedDocument;
             }
         } else {
-            var insertedDocument = affectedRow.Deserialize<TDocument>();
+            var insertedDocument = affectedRow.Deserialize<TDocument>(_serializerOptions);
             var key = DocumentHelpers.CalculateKey(insertedDocument);
             documents[key] = insertedDocument;
         }
