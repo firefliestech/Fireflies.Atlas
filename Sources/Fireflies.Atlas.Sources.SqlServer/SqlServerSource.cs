@@ -23,8 +23,8 @@ public class SqlServerSource : IDisposable {
     }
 
     public async Task<IEnumerable<TDocument>> GetDocuments<TDocument>(Expression<Func<TDocument, bool>>? predicate, SqlDescriptor sqlDescriptor, Expression<Func<TDocument, bool>>? filter, ExecutionFlags flags) where TDocument : new() {
-        using var lambdaToSqlTranslator = new LambdaToSqlTranslator<TDocument>();
-        var query = lambdaToSqlTranslator.Translate(sqlDescriptor, predicate, flags.HasFlag(ExecutionFlags.BypassFilter) ? null : filter);
+        using var lambdaToSqlTranslator = new LambdaToSqlTranslator<TDocument>(sqlDescriptor, predicate, flags.HasFlag(ExecutionFlags.BypassFilter) ? null : filter);
+        var query = lambdaToSqlTranslator.Translate();
         await using var connection = new SqlConnection(_connectionString);
         connection.Open();
         return (await connection.QueryAsync<TDocument>(query).ConfigureAwait(false)).ToArray();
