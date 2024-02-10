@@ -116,7 +116,7 @@ public class LambdaToSqlTranslator<T>(SqlDescriptor sqlDescriptor, Expression? e
     }
 
     protected override Expression VisitMethodCall(MethodCallExpression node) {
-        if(node.Object is not MemberExpression memberExpression || node.Arguments.Count != 1 || node.Arguments[0] is not ConstantExpression constantArgument) {
+        if(node.Object is not MemberExpression memberExpression || node.Arguments is not [ConstantExpression constantArgument, ..]) {
             throw new NotSupportedException($"The method call '{node.Method}' is not supported");
         }
 
