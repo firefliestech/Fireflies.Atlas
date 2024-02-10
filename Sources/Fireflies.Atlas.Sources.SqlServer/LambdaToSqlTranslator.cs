@@ -15,6 +15,9 @@ public class LambdaToSqlTranslator<T>(SqlDescriptor sqlDescriptor, Expression? e
     private static readonly MethodInfo? StringEndWithMethodInfo = typeof(string).GetMethod(nameof(string.EndsWith), new[] { typeof(string) });
     private static readonly MethodInfo? StringEndsWithWithStringComparisonMethodInfo = typeof(string).GetMethod(nameof(string.StartsWith), new[] { typeof(string), typeof(StringComparison) });
 
+    private static readonly MethodInfo? StringEqualsMethodInfo = typeof(string).GetMethod(nameof(string.Equals), new[] { typeof(string) });
+    private static readonly MethodInfo? StringEqualsWithStringComparisonMethodInfo = typeof(string).GetMethod(nameof(string.Equals), new[] { typeof(string), typeof(StringComparison) });
+
     public string Translate( ) {
         AddSelect();
         AddColumns();
@@ -135,6 +138,12 @@ public class LambdaToSqlTranslator<T>(SqlDescriptor sqlDescriptor, Expression? e
         if(node.Method == StringEndWithMethodInfo || node.Method == StringEndsWithWithStringComparisonMethodInfo) {
             Visit(memberExpression);
             _sqlAccumulator.Append($" LIKE '%{constantArgument.Value}'");
+            return node;
+        }
+
+        if(node.Method == StringEqualsMethodInfo || node.Method == StringEqualsWithStringComparisonMethodInfo) {
+            Visit(memberExpression);
+            _sqlAccumulator.Append($" = '{constantArgument.Value}'");
             return node;
         }
 
