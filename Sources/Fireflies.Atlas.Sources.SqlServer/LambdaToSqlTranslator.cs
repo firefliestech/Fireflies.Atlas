@@ -6,19 +6,10 @@ using Fireflies.Atlas.Core;
 
 namespace Fireflies.Atlas.Sources.SqlServer;
 
-public class LambdaToSqlTranslator<T>(SqlDescriptor sqlDescriptor, Expression? expression, Expression? filter) : ExpressionVisitor, IDisposable {
+public class LambdaToSqlTranslator<T>(IReadOnlyCollection<IMethodCallSqlExtender> methodExtenders, SqlDescriptor sqlDescriptor, Expression? expression, Expression? filter) : ExpressionVisitor, IDisposable {
     private readonly StringBuilder _sqlAccumulator = new();
-    private static readonly MethodInfo? StringContainsMethodInfo = typeof(string).GetMethod(nameof(string.Contains), new[] { typeof(string) });
-    private static readonly MethodInfo? StringContainsWithStringComparisonMethodInfo = typeof(string).GetMethod(nameof(string.Contains), new[] { typeof(string), typeof(StringComparison) });
-    private static readonly MethodInfo? StringStartsWithMethodInfo = typeof(string).GetMethod(nameof(string.StartsWith), new[] { typeof(string) });
-    private static readonly MethodInfo? StringStartsWithWithStringComparisonMethodInfo = typeof(string).GetMethod(nameof(string.StartsWith), new[] { typeof(string), typeof(StringComparison) });
-    private static readonly MethodInfo? StringEndWithMethodInfo = typeof(string).GetMethod(nameof(string.EndsWith), new[] { typeof(string) });
-    private static readonly MethodInfo? StringEndsWithWithStringComparisonMethodInfo = typeof(string).GetMethod(nameof(string.StartsWith), new[] { typeof(string), typeof(StringComparison) });
 
-    private static readonly MethodInfo? StringEqualsMethodInfo = typeof(string).GetMethod(nameof(string.Equals), new[] { typeof(string) });
-    private static readonly MethodInfo? StringEqualsWithStringComparisonMethodInfo = typeof(string).GetMethod(nameof(string.Equals), new[] { typeof(string), typeof(StringComparison) });
-
-    public string Translate( ) {
+    public string Translate() {
         AddSelect();
         AddColumns();
         AddFrom(sqlDescriptor);
@@ -119,32 +110,17 @@ public class LambdaToSqlTranslator<T>(SqlDescriptor sqlDescriptor, Expression? e
     }
 
     protected override Expression VisitMethodCall(MethodCallExpression node) {
-        if(node.Object is not MemberExpression memberExpression || node.Arguments is not [ConstantExpression constantArgument, ..]) {
+        if(node.Object is not MemberExpression memberExpression) {
             throw new NotSupportedException($"The method call '{node.Method}' is not supported");
         }
 
-        if(node.Method == StringContainsMethodInfo || node.Method == StringContainsWithStringComparisonMethodInfo) {
-            Visit(memberExpression);
-            _sqlAccumulator.Append($" LIKE '%{constantArgument.Value}%'");
-            return node;
-        }
-
-        if(node.Method == StringStartsWithMethodInfo || node.Method == StringStartsWithWithStringComparisonMethodInfo) {
-            Visit(memberExpression);
-            _sqlAccumulator.Append($" LIKE '{constantArgument.Value}%'");
-            return node;
-        }
-
-        if(node.Method == StringEndWithMethodInfo || node.Method == StringEndsWithWithStringComparisonMethodInfo) {
-            Visit(memberExpression);
-            _sqlAccumulator.Append($" LIKE '%{constantArgument.Value}'");
-            return node;
-        }
-
-        if(node.Method == StringEqualsMethodInfo || node.Method == StringEqualsWithStringComparisonMethodInfo) {
-            Visit(memberExpression);
-            _sqlAccumulator.Append($" = '{constantArgument.Value}'");
-            return node;
+        Visit(memberExpression);
+        foreach(var extender in methodExtenders) {
+            var (success, sql) = extender.Handle(node);
+            if(success) {
+                _sqlAccumulator.Append(sql);
+                return node;
+            }
         }
 
         var methodValue = ExpressionHelper.GetValue(node);
