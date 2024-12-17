@@ -146,6 +146,12 @@ public class LambdaToSqlTranslator<T>(IReadOnlyCollection<IMethodCallSqlExtender
             case null:
                 var nullableType = value.GetType();
                 var type = Nullable.GetUnderlyingType(nullableType) ?? nullableType;
+
+                if(type.IsEnum) {
+                    _sqlAccumulator.Append((int)value);
+                    return;
+                }
+
                 switch(Type.GetTypeCode(type)) {
                     case TypeCode.Boolean:
                         _sqlAccumulator.Append((bool)value ? 1 : 0);
