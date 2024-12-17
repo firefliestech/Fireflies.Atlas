@@ -51,14 +51,8 @@ public class AtlasDocumentDictionary<TDocument> : AtlasDocumentDictionary, IDocu
             return document;
         });
 
-        if(updated) {
-            foreach(var index in _indexes)
-                index.Remove(oldDocument!);
-        }
-
-        foreach(var index in _indexes) {
-            index.Add(document);
-        }
+        foreach(var index in _indexes)
+            index.AddOrUpdate(document);
 
         if(updated) {
             _logger.Debug(() => $"Document was updated. New: {DocumentHelpers.AsString(document)}. Old: {DocumentHelpers.AsString(oldDocument)}");
