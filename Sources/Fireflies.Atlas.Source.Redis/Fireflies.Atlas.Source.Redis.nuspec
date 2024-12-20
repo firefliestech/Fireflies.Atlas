@@ -11,7 +11,8 @@
 		<tags>fireflies atlas source redis</tags>
 	</metadata>
 	<dependencies>
-		<dependency id="StackExchange.Redis" version="2.6.122" />
+		<dependency id="StackExchange.Redis" version="2.8.22" />
+		<dependency id="StackExchange.Redis" version="2.8.22" />
 		<dependency id="Fireflies.Atlas.Core" version="$version$" />
 	</dependencies>
 </package>
