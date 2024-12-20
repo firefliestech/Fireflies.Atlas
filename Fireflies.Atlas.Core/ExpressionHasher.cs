@@ -4,67 +4,57 @@ using System.Reflection;
 namespace Fireflies.Atlas.Core;
 
 internal static class ExpressionHasher {
-    private const int NullHashCode = 0x61E04917;
+    private const int NullHashValue = 0x61E04917;
 
     [ThreadStatic]
-    private static HashVisitor _visitor;
+    private static HashVisitor? _visitor;
 
-    private static HashVisitor Visitor {
-        get {
-            if (_visitor == null)
-                _visitor = new HashVisitor();
-            return _visitor;
-        }
-    }
+    public static int GetHashCode(Expression? e) {
+        if(e == null)
+            return NullHashValue;
 
-    public static int GetHashCode(Expression e) {
-        if (e == null)
-            return NullHashCode;
+        _visitor ??= new HashVisitor();
 
-        var visitor = Visitor;
+        _visitor.Reset();
+        _visitor.Visit(e);
 
-        visitor.Reset();
-        visitor.Visit(e);
-
-        return visitor.Hash;
+        return _visitor.Hash.ToHashCode();
     }
 
     private sealed class HashVisitor : ExpressionVisitor {
-        private int _hash;
+        private HashCode _hash;
 
-        internal int Hash => _hash;
+        internal HashCode Hash => _hash;
 
         internal void Reset() {
-            _hash = 0;
+            _hash = new HashCode();
         }
 
         private void UpdateHash(int value) {
-            _hash = (_hash * 397) ^ value;
+            _hash.Add(value);
         }
 
-        private void UpdateHash(object component) {
-            int componentHash;
+        private void UpdateHash(object? component) {
+            var componentHash = NullHashValue;
 
-            if (component == null) {
-                componentHash = NullHashCode;
-            } else {
+            if(component != null) {
                 var member = component as MemberInfo;
-                if (member != null) {
+                if(member != null) {
                     componentHash = member.Name.GetHashCode();
 
                     var declaringType = member.DeclaringType;
-                    if (declaringType != null && declaringType.AssemblyQualifiedName != null)
+                    if(declaringType != null && declaringType.AssemblyQualifiedName != null)
                         componentHash = (componentHash * 397) ^ declaringType.AssemblyQualifiedName.GetHashCode();
                 } else {
                     componentHash = component.GetHashCode();
                 }
             }
 
-            _hash = (_hash * 397) ^ componentHash;
+            _hash.Add(componentHash);
         }
 
         public override Expression Visit(Expression node) {
-            if (node == null)
+            if(node == null)
                 return base.Visit(node);
 
             UpdateHash((int)node.NodeType);
