@@ -13,7 +13,10 @@ public class FieldIndex<TDocument, TProperty> : FieldIndex<TDocument> {
         _keyAccessor = ExpressionCompiler.Compile(property);
     }
 
-    public override void AddOrUpdate(TDocument document) {
+    public override void Update(TDocument document, TDocument? oldDocument) {
+        if(oldDocument != null)
+            Remove(oldDocument);
+
         var key = _keyAccessor(document);
         if(key == null)
             return;
@@ -82,7 +85,7 @@ public class FieldIndex<TDocument, TProperty> : FieldIndex<TDocument> {
 public abstract class FieldIndex<TDocument> {
     public MemberExpression MemberExpression { get; protected set; }
 
-    public abstract void AddOrUpdate(TDocument document);
+    public abstract void Update(TDocument document, TDocument? oldDocument);
     public abstract void Remove(TDocument document);
 
     public abstract (bool Success, IEnumerable<TDocument> RemainingDocuments) Match(Expression<Func<TDocument, bool>> normalizedExpression);

@@ -52,7 +52,7 @@ public class AtlasDocumentDictionary<TDocument> : AtlasDocumentDictionary, IDocu
         });
 
         foreach(var index in _indexes)
-            index.AddOrUpdate(document);
+            index.Update(document, oldDocument);
 
         if(updated) {
             _logger.Debug(() => $"Document was updated. New: {DocumentHelpers.AsString(document)}. Old: {DocumentHelpers.AsString(oldDocument)}");
